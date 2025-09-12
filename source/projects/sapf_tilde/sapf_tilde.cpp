@@ -51,6 +51,7 @@ void sapf_assist(t_sapf* x, void* b, long m, long a, char* s);
 void sapf_float(t_sapf* x, double f);
 void sapf_dsp64(t_sapf* x, t_object* dsp64, short* count, double samplerate, long maxvectorsize, long flags);
 void sapf_perform64(t_sapf* x, t_object* dsp64, double** ins, long numins, double** outs, long numouts, long sampleframes, long flags, void* userparam);
+void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv);
 
 // global class pointer variable
 static t_class* sapf_class = NULL;
@@ -68,6 +69,7 @@ void ext_main(void* r)
     class_addmethod(c, (method)sapf_float, "float", A_FLOAT, 0);
     class_addmethod(c, (method)sapf_dsp64, "dsp64", A_CANT, 0);
     class_addmethod(c, (method)sapf_assist, "assist", A_CANT, 0);
+    class_addmethod(c, (method)sapf_code, "code", A_GIMME, 0);
 
     class_dspinit(c);
     class_register(CLASS_BOX, c);
@@ -159,6 +161,101 @@ void sapf_free(t_sapf* x)
     dsp_free((t_pxobject*)x);
 
     post("sapf~: Cleanup complete");
+}
+
+void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
+{
+    if (!x || !x->sapfThread) {
+        post("sapf~: Error - VM not initialized");
+        return;
+    }
+    
+    if (x->compilationError) {
+        post("sapf~: Warning - VM in error state: %s", x->errorMessage);
+    }
+    
+    // Construct sapf code string from Max message atoms
+    char codeBuffer[4096]; // Buffer for sapf code
+    codeBuffer[0] = '\0';
+    
+    for (long i = 0; i < argc; i++) {
+        char atomStr[256];
+        
+        switch (argv[i].a_type) {
+            case A_LONG:
+                snprintf_zero(atomStr, sizeof(atomStr), "%ld", argv[i].a_w.w_long);
+                break;
+            case A_FLOAT:
+                snprintf_zero(atomStr, sizeof(atomStr), "%g", argv[i].a_w.w_float);
+                break;
+            case A_SYM:
+                strncpy_zero(atomStr, argv[i].a_w.w_sym->s_name, sizeof(atomStr) - 1);
+                atomStr[sizeof(atomStr) - 1] = '\0';
+                break;
+            default:
+                strncpy_zero(atomStr, "?", sizeof(atomStr) - 1);
+                break;
+        }
+        
+        // Add space if not first atom
+        if (i > 0) {
+            strncat(codeBuffer, " ", sizeof(codeBuffer) - strlen(codeBuffer) - 1);
+        }
+        strncat(codeBuffer, atomStr, sizeof(codeBuffer) - strlen(codeBuffer) - 1);
+    }
+    
+    // Check if code has changed (for caching)
+    bool needsRecompilation = true;
+    if (x->lastSapfCode) {
+        needsRecompilation = (strcmp(codeBuffer, x->lastSapfCode) != 0);
+    }
+    
+    if (needsRecompilation) {
+        post("sapf~: Compiling sapf code: %s", codeBuffer);
+        
+        try {
+            // Compile sapf code
+            P<Fun> newCompiledFunction;
+            bool success = x->sapfThread->compile(codeBuffer, newCompiledFunction, true);
+            
+            if (success && newCompiledFunction) {
+                // Update cached function and code
+                x->compiledFunction = newCompiledFunction;
+                
+                // Update cached code string
+                if (x->lastSapfCode) {
+                    free(x->lastSapfCode);
+                }
+                x->lastSapfCode = strdup(codeBuffer);
+                
+                // Clear error state
+                x->compilationError = false;
+                x->errorMessage[0] = '\0';
+                x->hasValidAudio = false; // Will be set when audio is generated
+                
+                post("sapf~: Compilation successful");
+                
+            } else {
+                // Compilation failed
+                x->compilationError = true;
+                strncpy(x->errorMessage, "Compilation failed", sizeof(x->errorMessage) - 1);
+                x->hasValidAudio = false;
+                
+                post("sapf~: Compilation failed for: %s", codeBuffer);
+            }
+            
+        } catch (const std::exception& e) {
+            // Exception during compilation
+            x->compilationError = true;
+            snprintf(x->errorMessage, sizeof(x->errorMessage), "Exception: %s", e.what());
+            x->hasValidAudio = false;
+            
+            post("sapf~: Compilation error: %s", e.what());
+        }
+        
+    } else {
+        post("sapf~: Using cached compilation for: %s", codeBuffer);
+    }
 }
 
 void sapf_assist(t_sapf* x, void* b, long m, long a, char* s)
