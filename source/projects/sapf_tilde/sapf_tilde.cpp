@@ -76,6 +76,8 @@ void sapf_perform64(t_sapf* x, t_object* dsp64, double** ins, long numins, doubl
 void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv);
 void sapf_status(t_sapf* x);
 void sapf_help(t_sapf* x);
+void sapf_stack(t_sapf* x);
+void sapf_clear(t_sapf* x);
 
 // global class pointer variable
 static t_class* sapf_class = NULL;
@@ -179,6 +181,8 @@ void ext_main(void* r)
     class_addmethod(c, (method)sapf_code,   "code",     A_GIMME, 0);
     class_addmethod(c, (method)sapf_status, "status",   0);
     class_addmethod(c, (method)sapf_help,   "help",     0);
+    class_addmethod(c, (method)sapf_stack,  "stack",    0);
+    class_addmethod(c, (method)sapf_clear,  "clear",    0);
 
     class_dspinit(c);
     class_register(CLASS_BOX, c);
@@ -414,13 +418,38 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
 
                 // Execute the compiled sapf code to generate audio result
                 try {
+                    // Clear stack before execution to ensure clean state
+                    size_t preStackDepth = x->sapfThread->stackDepth();
+                    if (preStackDepth > 0) {
+                        post("sapf~: Clearing %zu items from stack before execution", preStackDepth);
+                        x->sapfThread->clearStack();
+                    }
+                    
                     // Execute the compiled function
                     newCompiledFunction->apply(*x->sapfThread);
 
-                    // Check if execution produced audio results on the stack
-                    if (x->sapfThread->stackDepth() > 0) {
+                    // Check execution results and manage stack state
+                    size_t postStackDepth = x->sapfThread->stackDepth();
+                    post("sapf~: Execution completed, stack depth: %zu", postStackDepth);
+                    
+                    // Check for stack overflow conditions
+                    const size_t MAX_REASONABLE_STACK_DEPTH = 100;
+                    if (postStackDepth > MAX_REASONABLE_STACK_DEPTH) {
+                        post("sapf~: ⚠ WARNING: Very large stack depth (%zu items)", postStackDepth);
+                        post("sapf~: This may indicate runaway computation or inefficient code");
+                        post("sapf~: Consider sending 'clear' to reset stack");
+                    }
+                    
+                    if (postStackDepth > 0) {
                         // Get the top result from execution
                         V audioResult = x->sapfThread->pop();
+                        
+                        // Check for remaining items on stack (potential issue)
+                        size_t remainingItems = x->sapfThread->stackDepth();
+                        if (remainingItems > 0) {
+                            post("sapf~: ⚠ %zu items remain on stack after result extraction", remainingItems);
+                            post("sapf~: Hint: Expression may produce multiple values - only using top result");
+                        }
 
                         // Check if result is audio-compatible (ZIn compatible)
                         if (audioResult.isZIn()) {
@@ -441,7 +470,8 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
                             post("sapf~: Result type: %s", audioResult.isReal() ? "number" : "object");
                         }
                     } else {
-                        post("sapf~: ⚠ Code executed but produced no results");
+                        post("sapf~: ⚠ Code executed but produced no results on stack");
+                        post("sapf~: Hint: Ensure your sapf code produces a value (e.g., '440 0 sinosc')");
                     }
 
                 } catch (const std::exception& e) {
@@ -613,6 +643,17 @@ void sapf_status(t_sapf* x)
     post("sapf~: Sample Rate: %.1f Hz %s", 
          x->currentSampleRate,
          x->sampleRateChanged ? "(changed, needs VM update)" : "(synchronized)");
+    
+    // Stack Status
+    if (x->sapfThread) {
+        size_t stackDepth = x->sapfThread->stackDepth();
+        if (stackDepth == 0) {
+            post("sapf~: Stack: ✓ Empty (clean state)");
+        } else {
+            post("sapf~: Stack: ⚠ %zu items present", stackDepth);
+            post("sapf~: Hint: Send 'stack' to inspect or 'clear' to empty");
+        }
+    }
     
     // Memory Status
     post("sapf~: Memory: Function=%s, CodeCache=%s", 
@@ -789,6 +830,8 @@ void sapf_help(t_sapf* x)
     post("Common Commands:");
     post("  status  - Show VM status and current state");  
     post("  help    - Show this help message");
+    post("  stack   - Inspect current sapf stack contents");
+    post("  clear   - Clear sapf stack (removes all values)");
     post("");
     
     post("Basic Examples:");
@@ -821,4 +864,82 @@ void sapf_help(t_sapf* x)
     
     post("For more info: Send 'status' to check VM state");
     post("sapf~ version with full sapf language interpreter embedded");
+}
+
+void sapf_stack(t_sapf* x)
+{
+    if (!x) {
+        error("sapf~: Invalid object pointer");
+        return;
+    }
+    
+    if (!x->sapfThread) {
+        error("sapf~: VM thread not initialized");
+        return;
+    }
+    
+    post("sapf~: === STACK INSPECTION ===");
+    
+    size_t stackDepth = x->sapfThread->stackDepth();
+    post("sapf~: Current stack depth: %zu items", stackDepth);
+    
+    if (stackDepth == 0) {
+        post("sapf~: Stack is empty");
+    } else {
+        post("sapf~: Stack contents (top to bottom):");
+        
+        try {
+            // Use Thread's built-in printStack method
+            x->sapfThread->printStack();
+            
+        } catch (const std::exception& e) {
+            error("sapf~: Error inspecting stack: %s", e.what());
+        } catch (...) {
+            error("sapf~: Unknown error inspecting stack");
+        }
+        
+        if (stackDepth > 10) {
+            post("sapf~: ⚠ Large stack depth - consider simplifying expressions");
+        }
+    }
+    
+    post("sapf~: === END STACK ===");
+}
+
+void sapf_clear(t_sapf* x)
+{
+    if (!x) {
+        error("sapf~: Invalid object pointer");
+        return;
+    }
+    
+    if (!x->sapfThread) {
+        error("sapf~: VM thread not initialized");
+        return;
+    }
+    
+    size_t stackDepth = x->sapfThread->stackDepth();
+    
+    if (stackDepth == 0) {
+        post("sapf~: Stack already empty");
+    } else {
+        try {
+            // Clear the stack
+            x->sapfThread->clearStack();
+            
+            post("sapf~: ✓ Cleared %zu items from stack", stackDepth);
+            
+            // Thread-safe clearing of audio state since stack was cleared
+            os_unfair_lock_lock(&x->audioStateLock);
+            x->hasValidAudio = false;
+            os_unfair_lock_unlock(&x->audioStateLock);
+            
+            post("sapf~: Audio state cleared due to stack clear");
+            
+        } catch (const std::exception& e) {
+            error("sapf~: Error clearing stack: %s", e.what());
+        } catch (...) {
+            error("sapf~: Unknown error clearing stack");
+        }
+    }
 }
