@@ -27,6 +27,12 @@ extern void AddMidiOps();
 
 
 
+// Threading Model:
+// - sapfThread: Used in main thread for compilation and execution of sapf code
+// - audioThread: Used in audio callback (sapf_perform64) for thread-safe audio generation
+// - audioStateLock: Protects shared audio state between main and audio threads
+// - ZIn audioExtractor: Copied to audio thread to avoid cross-thread access
+
 // struct to represent the object's state
 typedef struct _sapf
 {
@@ -36,7 +42,8 @@ typedef struct _sapf
     double offset; // the value of a property of our object
     
     // Sapf execution context
-    Thread* sapfThread; // Main sapf execution thread
+    Thread* sapfThread; // Main sapf execution thread (used in main thread for compilation/execution)
+    Thread* audioThread; // Separate thread for audio processing (used in audio callback)
     
     // Compiled sapf code cache
     P<Fun> compiledFunction; // Currently compiled sapf function
@@ -196,8 +203,11 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
             // Initialize sapf built-in functions (only once globally)
             initSapfBuiltins();
             
-            // Create sapf execution thread
+            // Create sapf execution thread for main thread (compilation/execution)
             x->sapfThread = new Thread();
+            
+            // Create separate thread for audio processing (thread-safe audio generation)
+            x->audioThread = new Thread();
 
             // Initialize compiled function storage
             x->compiledFunction = P<Fun>(); // Initialize empty smart pointer
@@ -228,6 +238,10 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
                 delete x->sapfThread;
                 x->sapfThread = nullptr;
             }
+            if (x->audioThread) {
+                delete x->audioThread;
+                x->audioThread = nullptr;
+            }
             if (x->lastSapfCode) {
                 free(x->lastSapfCode);
                 x->lastSapfCode = nullptr;
@@ -248,13 +262,23 @@ void sapf_free(t_sapf* x)
     
     post("sapf~: Cleaning up sapf VM resources");
     
-    // Clean up sapf Thread (manually allocated)
+    // Clean up main sapf Thread (manually allocated)
     if (x->sapfThread) {
         try {
             delete x->sapfThread;
             x->sapfThread = nullptr;
         } catch (const std::exception& e) {
-            post("sapf~: Error cleaning up Thread: %s", e.what());
+            post("sapf~: Error cleaning up main Thread: %s", e.what());
+        }
+    }
+    
+    // Clean up audio sapf Thread (manually allocated)
+    if (x->audioThread) {
+        try {
+            delete x->audioThread;
+            x->audioThread = nullptr;
+        } catch (const std::exception& e) {
+            post("sapf~: Error cleaning up audio Thread: %s", e.what());
         }
     }
     
@@ -282,10 +306,10 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         return;
     }
     
-    if (!x->sapfThread) {
-        error("sapf~: VM not initialized - object creation may have failed");
+    if (!x->sapfThread || !x->audioThread) {
+        error("sapf~: VM threads not initialized - object creation may have failed");
         x->compilationError = true;
-        strncpy_zero(x->errorMessage, "VM not initialized", sizeof(x->errorMessage) - 1);
+        strncpy_zero(x->errorMessage, "VM threads not initialized", sizeof(x->errorMessage) - 1);
         x->errorMessage[sizeof(x->errorMessage) - 1] = '\0';
         return;
     }
@@ -547,8 +571,11 @@ void sapf_status(t_sapf* x)
     post("sapf~: === STATUS REPORT ===");
     
     // VM Initialization Status
-    if (x->sapfThread) {
-        post("sapf~: VM: ✓ Initialized and ready");
+    if (x->sapfThread && x->audioThread) {
+        post("sapf~: VM: ✓ Both main and audio threads initialized and ready");
+    } else if (x->sapfThread || x->audioThread) {
+        post("sapf~: VM: ⚠ Partially initialized - main:%s audio:%s",
+             x->sapfThread ? "OK" : "FAIL", x->audioThread ? "OK" : "FAIL");
     } else {
         post("sapf~: VM: ✗ Not initialized");
         return; // No point in checking other status if VM is not initialized
@@ -634,10 +661,12 @@ void sapf_dsp64(t_sapf* x, t_object* dsp64, short* count, double samplerate, lon
             
             post("sapf~: ✓ Configured sapf VM with sample rate: %.1f Hz", samplerate);
             
-            // Update Thread rate context if thread exists
-            if (x->sapfThread) {
-                // The Thread automatically gets the updated rate from vm.ar when needed
-                post("sapf~: ✓ Thread will use updated rate context");
+            // Update Thread rate context if threads exist
+            if (x->sapfThread && x->audioThread) {
+                // Both threads automatically get the updated rate from vm.ar when needed
+                post("sapf~: ✓ Both main and audio threads will use updated rate context");
+            } else {
+                post("sapf~: ⚠ Some threads not initialized - rate update may not apply fully");
             }
             
         } catch (const std::exception& e) {
@@ -680,13 +709,15 @@ void sapf_perform64(t_sapf* x, t_object* dsp64, double** ins, long numins, doubl
     // Thread-safe check for valid sapf audio
     bool hasValidAudio = false;
     ZIn audioExtractor; // Local copy for thread safety
+    Thread* localAudioThread = nullptr; // Local reference to audio thread
     
-    if (x && x->sapfThread) {
-        // Briefly lock to copy audio state
+    if (x && x->audioThread) {
+        // Briefly lock to copy audio state and get thread reference
         os_unfair_lock_lock(&x->audioStateLock);
         hasValidAudio = x->hasValidAudio;
         if (hasValidAudio) {
             audioExtractor = x->audioExtractor; // Copy the ZIn
+            localAudioThread = x->audioThread; // Get reference to audio thread
         }
         os_unfair_lock_unlock(&x->audioStateLock);
     }
@@ -697,8 +728,11 @@ void sapf_perform64(t_sapf* x, t_object* dsp64, double** ins, long numins, doubl
             // We'll then convert to Max's double format
             std::vector<float> floatBuffer(sampleframes);
             
-            // Use sapf's audio extraction to fill temporary buffer with local copy
-            bool audioAvailable = audioExtractor.fill(*x->sapfThread, n, floatBuffer.data(), 1);
+            // Use sapf's audio extraction to fill temporary buffer with dedicated audio thread
+            bool audioAvailable = false;
+            if (localAudioThread) {
+                audioAvailable = audioExtractor.fill(*localAudioThread, n, floatBuffer.data(), 1);
+            }
             
             if (audioAvailable) {
                 // Convert from float to double for Max's buffer
