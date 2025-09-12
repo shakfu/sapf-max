@@ -67,11 +67,11 @@ void ext_main(void* r)
 
     t_class* c = class_new("sapf~", (method)sapf_new, (method)sapf_free, (long)sizeof(t_sapf), 0L, A_GIMME, 0);
 
-    class_addmethod(c, (method)sapf_float, "float", A_FLOAT, 0);
-    class_addmethod(c, (method)sapf_dsp64, "dsp64", A_CANT, 0);
-    class_addmethod(c, (method)sapf_assist, "assist", A_CANT, 0);
-    class_addmethod(c, (method)sapf_code, "code", A_GIMME, 0);
-    class_addmethod(c, (method)sapf_status, "status", 0);
+    class_addmethod(c, (method)sapf_float,  "float",    A_FLOAT, 0);
+    class_addmethod(c, (method)sapf_dsp64,  "dsp64",    A_CANT,  0);
+    class_addmethod(c, (method)sapf_assist, "assist",   A_CANT,  0);
+    class_addmethod(c, (method)sapf_code,   "code",     A_GIMME, 0);
+    class_addmethod(c, (method)sapf_status, "status",   0);
 
     class_dspinit(c);
     class_register(CLASS_BOX, c);
@@ -81,6 +81,8 @@ void ext_main(void* r)
 void* sapf_new(t_symbol* s, long argc, t_atom* argv)
 {
     t_sapf* x = (t_sapf*)object_alloc(sapf_class);
+
+    post("hello");
 
     if (x) {
         dsp_setup((t_pxobject*)x, 1); // MSP inlets: arg is # of inlets and is REQUIRED!
@@ -354,10 +356,10 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
 
 void sapf_status(t_sapf* x)
 {
-    if (!x) {
-        error("sapf~: Invalid object pointer");
-        return;
-    }
+    // if (!x) {
+    //     error("sapf~: Invalid object pointer");
+    //     return;
+    // }
     
     post("sapf~: === STATUS REPORT ===");
     

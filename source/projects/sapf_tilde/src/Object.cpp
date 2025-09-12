@@ -22,12 +22,12 @@
 #include <algorithm>
 #include <cstdarg>
 
-void post(const char* fmt, ...)
-{
-    va_list vargs;
-    va_start(vargs, fmt);
-    vprintf(fmt, vargs);
-}
+// void post(const char* fmt, ...)
+// {
+//     va_list vargs;
+//     va_start(vargs, fmt);
+//     vprintf(fmt, vargs);
+// }
 
 void zprintf(std::string& out, const char* fmt, ...)
 {
