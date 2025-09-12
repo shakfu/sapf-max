@@ -235,7 +235,7 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
             
             // Mark as failed
             x->compilationError = true;
-            strncpy(x->errorMessage, "VM initialization failed", sizeof(x->errorMessage) - 1);
+            strncpy_zero(x->errorMessage, "VM initialization failed", sizeof(x->errorMessage) - 1);
             x->errorMessage[sizeof(x->errorMessage) - 1] = '\0';
         }
     }
@@ -313,14 +313,14 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         // Convert atom to string with type validation
         switch (argv[i].a_type) {
             case A_LONG:
-                snprintf(atomStr, sizeof(atomStr), "%ld", argv[i].a_w.w_long);
+                snprintf_zero(atomStr, sizeof(atomStr), "%ld", argv[i].a_w.w_long);
                 break;
             case A_FLOAT:
-                snprintf(atomStr, sizeof(atomStr), "%g", argv[i].a_w.w_float);
+                snprintf_zero(atomStr, sizeof(atomStr), "%g", argv[i].a_w.w_float);
                 break;
             case A_SYM:
                 if (argv[i].a_w.w_sym && argv[i].a_w.w_sym->s_name) {
-                    strncpy(atomStr, argv[i].a_w.w_sym->s_name, sizeof(atomStr) - 1);
+                    strncpy_zero(atomStr, argv[i].a_w.w_sym->s_name, sizeof(atomStr) - 1);
                     atomStr[sizeof(atomStr) - 1] = '\0';
                 } else {
                     error("sapf~: Invalid symbol atom at position %ld", i);
@@ -479,7 +479,7 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
                     errorDetail = "Parser returned false (syntax error)";
                 }
                 
-                snprintf(x->errorMessage, sizeof(x->errorMessage), "Compilation failed: %s", errorDetail);
+                snprintf_zero(x->errorMessage, sizeof(x->errorMessage), "Compilation failed: %s", errorDetail);
                 
                 error("sapf~: ✗ Compilation failed for: \"%s\"", codeBuffer);
                 post("sapf~: Error: %s", errorDetail);
@@ -497,7 +497,7 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
             x->compilationError = true;
             x->hasValidAudio = false;
             
-            snprintf(x->errorMessage, sizeof(x->errorMessage), "Exception: %s", e.what());
+            snprintf_zero(x->errorMessage, sizeof(x->errorMessage), "Exception: %s", e.what());
             
             // Use enhanced error reporting for better user guidance
             reportSapfError(x, codeBuffer, e);
