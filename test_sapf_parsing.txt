@@ -1,0 +1,85 @@
+SAPF~ Max External - Parser Testing Plan
+==========================================
+
+Test Categories:
+1. Basic Numbers and Constants
+2. Simple Math Operations  
+3. Audio Oscillators
+4. Stack-based Operations
+5. Function Combinations
+6. Error Conditions
+
+=== TEST 1: Basic Numbers ===
+code 440
+code 0.5
+code -1.2
+code 0
+
+Expected: Should compile successfully, may not produce audio
+
+=== TEST 2: Simple Math Operations ===  
+code 2 3 +
+code 10 2 -
+code 4 5 *
+code 12 3 /
+
+Expected: Should compile and execute, results on stack
+
+=== TEST 3: Audio Oscillators ===
+code 440 0 sinosc
+code 220 0.5 sinosc
+code 880 0 saw
+code 110 0 square
+
+Expected: Should compile and produce audio-compatible results
+Note: Using 'saw' instead of 'sawtooth' (correct sapf function name)
+
+=== TEST 4: Audio with Volume ===
+code 440 0 sinosc 0.3 *
+code 220 0 sinosc 0.1 *
+code 880 0 saw 0.5 *
+
+Expected: Should produce audio at specified volumes
+
+=== TEST 5: Combined Math and Audio ===
+code 220 330 + 0 sinosc
+code 440 2 * 0 sinosc
+code 880 2 / 0 sinosc 0.2 *
+
+Expected: Math operations feed into audio generation
+
+=== TEST 6: Stack Operations ===
+code 1 2 3
+code 440 0 sinosc aa 0.5 * ba 0.2 * +
+
+Expected: Stack manipulation should work
+Note: Using 'aa' (duplicate) and 'ba' (swap) - correct sapf syntax
+
+=== TEST 7: Error Conditions ===
+code sinosc          (missing arguments)
+code 440 +           (stack underflow)
+code undefined_func  (undefined symbol)
+code 440 0 sinosc (  (syntax error)
+
+Expected: Should provide helpful error messages
+
+=== TEST 8: Complex Expressions ===
+code 440 0 sinosc 0.3 * 220 0 sinosc 0.1 * +
+code 440 0 sinosc aa 0.5 * ba +
+
+Expected: More complex audio synthesis
+Note: Removed 'linterp' test as function not found in codebase
+
+=== TEST 9: Additional Oscillators ===
+code 440 0 0.5 pulse
+code 220 0 lfsaw
+code 330 0 lfsquare
+
+Expected: Other oscillator types should work
+
+=== TEST 10: Stack Depth and Clearing ===
+code 1 2 3 stackDepth
+code 1 2 3 clear
+code 1 2 3 pop
+
+Expected: Stack management functions should work
