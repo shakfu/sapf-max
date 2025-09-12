@@ -24,6 +24,8 @@ extern void AddMidiOps();
 #include "ext.h" // standard Max include, always required (except in Jitter)
 #include "ext_obex.h" // required for "new" style objects
 #include "z_dsp.h" // required for MSP objects
+#include "ext_atomic.h" // Max's atomic operations for lock-free threading
+#include "ext_systhread.h" // Max's thread-safe primitives
 
 
 
@@ -49,11 +51,14 @@ typedef struct _sapf
     P<Fun> compiledFunction; // Currently compiled sapf function
     char* lastSapfCode; // Last compiled sapf code string for change detection
     
-    // Audio extraction interface
+    // Audio extraction interface (lock-free access via atomics)
     ZIn audioExtractor; // Interface for extracting audio from sapf results (single channel)
     ZIn audioExtractors[8]; // Multi-channel audio extractors (up to 8 channels)
-    int numAudioChannels; // Number of active audio channels
-    bool hasValidAudio; // Flag indicating if audioExtractor contains valid audio data
+    
+    // Atomic state variables for lock-free audio thread access
+    t_int32_atomic numAudioChannels; // Number of active audio channels
+    t_int32_atomic hasValidAudio; // Flag indicating if audioExtractor contains valid audio data (0/1)
+    t_int32_atomic audioStateVersion; // Version counter for audio state changes
     
     // Error handling and status
     bool compilationError; // True if last compilation failed
@@ -62,9 +67,6 @@ typedef struct _sapf
     // Sample rate synchronization
     double currentSampleRate; // Current sample rate from Max
     bool sampleRateChanged; // Flag to trigger VM reconfiguration
-    
-    // Thread synchronization for real-time audio safety
-    os_unfair_lock audioStateLock; // Protects audio-related shared state
     
 } t_sapf;
 
@@ -224,8 +226,11 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
             for (int i = 0; i < 8; i++) {
                 x->audioExtractors[i] = ZIn(); // Initialize multi-channel extractors
             }
+            
+            // Initialize atomic variables for lock-free thread communication
             x->numAudioChannels = 0; // No channels active initially
-            x->hasValidAudio = false;
+            x->hasValidAudio = 0; // False (atomic: 0 = false, 1 = true)
+            x->audioStateVersion = 0; // Start with version 0
             
             // Initialize error handling
             x->compilationError = false;
@@ -234,9 +239,6 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
             // Initialize sample rate tracking
             x->currentSampleRate = sys_getsr(); // Default until sapf_dsp64 sets it
             x->sampleRateChanged = true; // Force initial configuration
-            
-            // Initialize thread synchronization
-            x->audioStateLock = OS_UNFAIR_LOCK_INIT;
             
             post("sapf~: Initialized with sapf language interpreter");
             
@@ -395,6 +397,35 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         return;
     }
     
+    // Check for 'play' command and provide user guidance
+    if (strstr(codeBuffer, "play")) {
+        post("sapf~: Warning - 'play' command detected in code");
+        post("sapf~: The Max external automatically outputs audio - remove 'play' from your code");
+        post("sapf~: Original: %s", codeBuffer);
+        
+        // Remove 'play' from the code string for processing
+        char* playPos = strstr(codeBuffer, " play");
+        if (playPos) {
+            *playPos = '\0';  // Truncate at 'play' command
+            post("sapf~: Automatically removing 'play' - using: %s", codeBuffer);
+        } else {
+            // Handle case where 'play' is at the beginning or standalone
+            playPos = strstr(codeBuffer, "play");
+            if (playPos == codeBuffer) {
+                // 'play' is at the beginning - this leaves an empty string
+                post("sapf~: Code starts with 'play' - removing it leaves no audio generation code");
+                post("sapf~: Try: 440 0 sinosc 0.3 * instead of: play");
+                return; // Exit early since no meaningful code remains
+            }
+        }
+        
+        // Re-validate string length after play removal
+        if (strlen(codeBuffer) == 0) {
+            post("sapf~: No valid code remains after removing 'play' command");
+            return;
+        }
+    }
+    
     // Check if code has changed (for caching)
     bool needsRecompilation = true;
     if (x->lastSapfCode) {
@@ -409,10 +440,8 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
             x->compilationError = false;
             x->errorMessage[0] = '\0';
             
-            // Thread-safe clearing of audio state during compilation
-            os_unfair_lock_lock(&x->audioStateLock);
-            x->hasValidAudio = false;
-            os_unfair_lock_unlock(&x->audioStateLock);
+            // Clear audio state during compilation (atomic)
+            x->hasValidAudio = 0; // Atomic write
             
             // Attempt compilation with comprehensive error capture
             P<Fun> newCompiledFunction;
@@ -438,6 +467,16 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
                     size_t postStackDepth = x->sapfThread->stackDepth();
                     post("sapf~: Execution completed, stack depth: %zu", postStackDepth);
                     
+                    // Debug: Print stack contents after execution
+                    if (postStackDepth > 0) {
+                        V topValue = x->sapfThread->top();
+                        post("sapf~: DEBUG - Top stack value type: %s", 
+                             topValue.isZIn() ? "ZIn" : 
+                             topValue.isList() ? "List" : 
+                             topValue.isReal() ? "Real" : 
+                             topValue.isObject() ? "Object" : "Unknown");
+                    }
+                    
                     // Check for stack overflow conditions
                     const size_t MAX_REASONABLE_STACK_DEPTH = 100;
                     if (postStackDepth > MAX_REASONABLE_STACK_DEPTH) {
@@ -461,11 +500,11 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
                         // Enhanced multi-channel audio result processing
                         if (audioResult.isZIn()) {
                             // Single channel audio result (ZList)
-                            os_unfair_lock_lock(&x->audioStateLock);
+                            // Lock-free atomic updates
                             x->audioExtractor.set(audioResult);
                             x->numAudioChannels = 1;
-                            x->hasValidAudio = true;
-                            os_unfair_lock_unlock(&x->audioStateLock);
+                            ATOMIC_INCREMENT(&x->audioStateVersion);
+                            x->hasValidAudio = 1;
 
                             post("sapf~: ✓ Single-channel audio result ready for playback");
                             
@@ -478,7 +517,7 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
                                     int numChannels = std::min((int)channels->size(), 8); // Limit to 8 channels
                                     
                                     if (numChannels > 0) {
-                                        os_unfair_lock_lock(&x->audioStateLock);
+                                        // Lock removed - using atomic operations
                                         
                                         // Check if all list elements are audio-compatible
                                         bool allAudioCompatible = true;
@@ -494,55 +533,55 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
                                         
                                         if (allAudioCompatible) {
                                             x->numAudioChannels = numChannels;
-                                            x->hasValidAudio = true;
-                                            os_unfair_lock_unlock(&x->audioStateLock);
+                                            x->hasValidAudio = 1;
+                                            // Unlock removed - using atomic operations
                                             
                                             post("sapf~: ✓ %d-channel audio result ready for playbook", numChannels);
                                         } else {
-                                            x->hasValidAudio = false;
-                                            os_unfair_lock_unlock(&x->audioStateLock);
+                                            x->hasValidAudio = 0;
+                                            // Unlock removed - using atomic operations
                                             
                                             post("sapf~: ⚠ List contains non-audio elements - using single channel fallback");
                                             // Fall back to single channel processing
-                                            os_unfair_lock_lock(&x->audioStateLock);
+                                            // Lock removed - using atomic operations
                                             x->audioExtractor.set(audioResult);
                                             x->numAudioChannels = 1;
-                                            x->hasValidAudio = true;
-                                            os_unfair_lock_unlock(&x->audioStateLock);
+                                            x->hasValidAudio = 1;
+                                            // Unlock removed - using atomic operations
                                         }
                                     } else {
-                                        os_unfair_lock_lock(&x->audioStateLock);
-                                        x->hasValidAudio = false;
-                                        os_unfair_lock_unlock(&x->audioStateLock);
+                                        // Lock removed - using atomic operations
+                                        x->hasValidAudio = 0;
+                                        // Unlock removed - using atomic operations
                                         
                                         post("sapf~: ⚠ Empty list - no audio channels");
                                     }
                                 } else {
                                     // Infinite list - treat as single channel
-                                    os_unfair_lock_lock(&x->audioStateLock);
+                                    // Lock removed - using atomic operations
                                     x->audioExtractor.set(audioResult);
                                     x->numAudioChannels = 1;
-                                    x->hasValidAudio = true;
-                                    os_unfair_lock_unlock(&x->audioStateLock);
+                                    x->hasValidAudio = 1;
+                                    // Unlock removed - using atomic operations
                                     
                                     post("sapf~: ✓ Infinite list treated as single-channel audio");
                                 }
                             } catch (const std::exception& e) {
                                 // Error processing list - fall back to single channel
-                                os_unfair_lock_lock(&x->audioStateLock);
+                                // Lock removed - using atomic operations
                                 x->audioExtractor.set(audioResult);
                                 x->numAudioChannels = 1;
-                                x->hasValidAudio = true;
-                                os_unfair_lock_unlock(&x->audioStateLock);
+                                x->hasValidAudio = 1;
+                                // Unlock removed - using atomic operations
                                 
                                 post("sapf~: ⚠ List processing error: %s - using single channel", e.what());
                             }
                         } else {
                             // Non-audio result
-                            os_unfair_lock_lock(&x->audioStateLock);
-                            x->hasValidAudio = false;
+                            // Lock removed - using atomic operations
+                            x->hasValidAudio = 0;
                             x->numAudioChannels = 0;
-                            os_unfair_lock_unlock(&x->audioStateLock);
+                            // Unlock removed - using atomic operations
                             
                             post("sapf~: ⚠ Code executed but result is not audio-compatible");
                             post("sapf~: Result type: %s", audioResult.isReal() ? "number" : "object");
@@ -556,9 +595,9 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
                     error("sapf~: ✗ Execution error: %s", e.what());
                     
                     // Thread-safe clearing of audio state on execution error
-                    os_unfair_lock_lock(&x->audioStateLock);
-                    x->hasValidAudio = false;
-                    os_unfair_lock_unlock(&x->audioStateLock);
+                    // Lock removed - using atomic operations
+                    x->hasValidAudio = 0;
+                    // Unlock removed - using atomic operations
                     
                     // Provide execution-specific error guidance
                     post("sapf~: Code compiled successfully but failed during execution");
@@ -598,9 +637,9 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
                 x->compilationError = true;
                 
                 // Thread-safe clearing of audio state on compilation failure
-                os_unfair_lock_lock(&x->audioStateLock);
-                x->hasValidAudio = false;
-                os_unfair_lock_unlock(&x->audioStateLock);
+                // Lock removed - using atomic operations
+                x->hasValidAudio = 0;
+                // Unlock removed - using atomic operations
                 
                 // Try to get more detailed error information from sapf
                 // Check if it's a parsing issue or function creation issue
@@ -627,7 +666,7 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         } catch (const std::exception& e) {
             // Exception during compilation - handle gracefully with enhanced error reporting
             x->compilationError = true;
-            x->hasValidAudio = false;
+            x->hasValidAudio = 0;
             
             snprintf_zero(x->errorMessage, sizeof(x->errorMessage), "Exception: %s", e.what());
             
@@ -638,9 +677,8 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
             x->compilationError = true;
             
             // Thread-safe clearing of audio state on unknown exception
-            os_unfair_lock_lock(&x->audioStateLock);
-            x->hasValidAudio = false;
-            os_unfair_lock_unlock(&x->audioStateLock);
+            // Lock-free atomic update
+            x->hasValidAudio = 0;
             
             strncpy_zero(x->errorMessage, "Unknown exception during compilation", sizeof(x->errorMessage) - 1);
             x->errorMessage[sizeof(x->errorMessage) - 1] = '\0';
@@ -708,10 +746,9 @@ void sapf_status(t_sapf* x)
     // Audio Status (thread-safe read)
     bool audioStatus;
     int audioChannels;
-    os_unfair_lock_lock(&x->audioStateLock);
+    // Lock-free atomic reads
     audioStatus = x->hasValidAudio;
     audioChannels = x->numAudioChannels;
-    os_unfair_lock_unlock(&x->audioStateLock);
     
     if (audioStatus) {
         if (audioChannels == 1) {
@@ -829,126 +866,133 @@ void sapf_dsp64(t_sapf* x, t_object* dsp64, short* count, double samplerate, lon
 // this is the 64-bit perform method audio vectors
 void sapf_perform64(t_sapf* x, t_object* dsp64, double** ins, long numins, double** outs, long numouts, long sampleframes, long flags, void* userparam)
 {
-    int n = (int)sampleframes;
-
-    // Enhanced multi-channel audio bridge with thread-safe state access
-    bool hasValidAudio = false;
-    int numChannels = 0;
-    ZIn audioExtractor; // Legacy single channel extractor
-    ZIn audioExtractors[8]; // Multi-channel extractors
-    Thread* localAudioThread = nullptr;
+    long n = sampleframes;
     
-    if (x && x->audioThread) {
-        // Thread-safe copy of audio state
-        os_unfair_lock_lock(&x->audioStateLock);
-        hasValidAudio = x->hasValidAudio;
-        if (hasValidAudio) {
-            numChannels = x->numAudioChannels;
-            localAudioThread = x->audioThread;
-            
-            if (numChannels == 1) {
-                // Single channel mode
-                audioExtractor = x->audioExtractor;
-            } else if (numChannels > 1) {
-                // Multi-channel mode
-                for (int i = 0; i < std::min(numChannels, 8); i++) {
-                    audioExtractors[i] = x->audioExtractors[i];
-                }
-            }
+    // Lock-free approach: check atomic flag for valid audio
+    if (x && x->hasValidAudio && x->audioThread) {
+        
+        // Debug: First few calls only
+        static int debugCallCount = 0;
+        if (debugCallCount < 3) {
+            post("sapf~: DEBUG - Audio callback: hasValidAudio=%s, frames=%ld", 
+                 x->hasValidAudio ? "true" : "false", n);
+            debugCallCount++;
         }
-        os_unfair_lock_unlock(&x->audioStateLock);
-    }
-    
-    if (hasValidAudio && localAudioThread) {
+        
         try {
-            bool anyAudioAvailable = false;
+            // Lock-free access to audio state using atomic reads
+            int localChannels = x->numAudioChannels; // Atomic read
             
-            // Process each output channel up to Max's numouts
-            for (long outChan = 0; outChan < numouts; outChan++) {
-                t_double* outBuffer = outs[outChan];
+            if (localChannels >= 1) {
+                // Generate audio using sapf's ZIn::fill method
+                std::vector<float> tempBuffer(n);
+                int frameCount = (int)n;
+                int originalFrameCount = frameCount;
                 
-                if (outChan < numChannels) {
-                    // We have sapf audio for this channel
-                    std::vector<float> floatBuffer(sampleframes);
-                    bool channelAudioAvailable = false;
+                if (debugCallCount <= 3) {
+                    post("sapf~: DEBUG - Before fill: frameCount=%d, bufferSize=%ld", frameCount, n);
+                }
+                
+                bool isDone = x->audioExtractor.fill(*x->audioThread, frameCount, tempBuffer.data(), 1);
+                
+                if (debugCallCount <= 3) {
+                    post("sapf~: DEBUG - After fill: isDone=%s, frameCount=%d (was %d)", 
+                         isDone ? "true" : "false", frameCount, originalFrameCount);
                     
-                    if (numChannels == 1) {
-                        // Single channel mode - use for all Max outputs
-                        channelAudioAvailable = audioExtractor.fill(*localAudioThread, n, floatBuffer.data(), 1);
-                    } else {
-                        // Multi-channel mode - use specific channel extractor
-                        channelAudioAvailable = audioExtractors[outChan].fill(*localAudioThread, n, floatBuffer.data(), 1);
+                    // Check if we got any non-zero samples
+                    bool hasNonZeroSamples = false;
+                    for (int i = 0; i < std::min(frameCount, 8); i++) { // Check first 8 samples
+                        if (tempBuffer[i] != 0.0f) {
+                            hasNonZeroSamples = true;
+                            break;
+                        }
+                    }
+                    post("sapf~: DEBUG - Buffer has non-zero samples: %s", hasNonZeroSamples ? "true" : "false");
+                    if (hasNonZeroSamples) {
+                        post("sapf~: DEBUG - Sample values: [0]=%.6f [1]=%.6f [2]=%.6f", 
+                             tempBuffer[0], tempBuffer[1], tempBuffer[2]);
+                    }
+                }
+                
+                // ZIn::fill() returns false for ongoing audio, true when stream ends
+                // So we have audio available when frameCount > 0 (regardless of isDone return value)
+                if (frameCount > 0) {
+                    // Copy generated audio to all Max output channels
+                    for (long chan = 0; chan < numouts; chan++) {
+                        for (long i = 0; i < std::min((long)frameCount, n); i++) {
+                            outs[chan][i] = (double)tempBuffer[i];
+                        }
+                        // Fill remaining samples with silence if needed
+                        for (long i = frameCount; i < n; i++) {
+                            outs[chan][i] = 0.0;
+                        }
                     }
                     
-                    if (channelAudioAvailable) {
-                        // Convert from float to double for Max's buffer
-                        for (int i = 0; i < (int)sampleframes; i++) {
-                            outBuffer[i] = (double)floatBuffer[i];
-                        }
-                        anyAudioAvailable = true;
-                    } else {
-                        // This channel's audio stream ended - fill with silence
-                        for (int i = 0; i < (int)sampleframes; i++) {
-                            outBuffer[i] = 0.0;
+                    if (debugCallCount <= 3) {
+                        post("sapf~: DEBUG - Successfully generated %d frames of audio", frameCount);
+                    }
+                    
+                    // If the generator indicates it's done (isDone=true), mark as invalid for future calls
+                    if (isDone) {
+                        x->hasValidAudio = 0; // Stream ended, mark as invalid
+                        if (debugCallCount <= 3) {
+                            post("sapf~: DEBUG - Stream ended, marking audio as invalid");
                         }
                     }
                 } else {
-                    // No sapf audio for this Max channel - fill with silence
-                    for (int i = 0; i < (int)sampleframes; i++) {
-                        outBuffer[i] = 0.0;
+                    // No audio frames generated - fill with silence and mark invalid
+                    for (long chan = 0; chan < numouts; chan++) {
+                        for (long i = 0; i < n; i++) {
+                            outs[chan][i] = 0.0;
+                        }
+                    }
+                    
+                    x->hasValidAudio = 0; // Atomically mark as invalid
+                    
+                    if (debugCallCount <= 3) {
+                        post("sapf~: DEBUG - No audio frames generated: frameCount=%d", frameCount);
+                    }
+                }
+            } else {
+                // No channels configured - silence
+                for (long chan = 0; chan < numouts; chan++) {
+                    for (long i = 0; i < n; i++) {
+                        outs[chan][i] = 0.0;
                     }
                 }
             }
             
-            // If no audio is available on any channel, mark as invalid
-            if (!anyAudioAvailable) {
-                os_unfair_lock_lock(&x->audioStateLock);
-                x->hasValidAudio = false;
-                os_unfair_lock_unlock(&x->audioStateLock);
-            }
-            
         } catch (const std::exception& e) {
-            // Exception in audio thread - fill all outputs with silence
-            for (long outChan = 0; outChan < numouts; outChan++) {
-                t_double* outBuffer = outs[outChan];
-                for (int i = 0; i < (int)sampleframes; i++) {
-                    outBuffer[i] = 0.0;
+            // Exception in audio processing - output silence
+            
+            for (long chan = 0; chan < numouts; chan++) {
+                for (long i = 0; i < n; i++) {
+                    outs[chan][i] = 0.0;
                 }
             }
-            
-            // Thread-safely mark audio as failed
-            os_unfair_lock_lock(&x->audioStateLock);
-            x->hasValidAudio = false;
-            os_unfair_lock_unlock(&x->audioStateLock);
-            
-        } catch (...) {
-            // Unknown exception in audio thread - fill all outputs with silence
-            for (long outChan = 0; outChan < numouts; outChan++) {
-                t_double* outBuffer = outs[outChan];
-                for (int i = 0; i < (int)sampleframes; i++) {
-                    outBuffer[i] = 0.0;
-                }
-            }
-            
-            os_unfair_lock_lock(&x->audioStateLock);
-            x->hasValidAudio = false;
-            os_unfair_lock_unlock(&x->audioStateLock);
+            post("sapf~: Audio exception: %s", e.what());
         }
         
     } else {
-        // No valid sapf audio - fill all outputs with silence or pass-through
-        for (long outChan = 0; outChan < numouts; outChan++) {
-            t_double* outBuffer = outs[outChan];
-            if (outChan == 0 && numins > 0) {
-                // First output: pass-through with offset (backward compatibility)
-                t_double* inBuffer = ins[0];
-                for (int i = 0; i < (int)sampleframes; i++) {
-                    outBuffer[i] = inBuffer[i] + x->offset;
+        // No valid audio - use pass-through or silence
+        static int noAudioCallCount = 0;
+        if (noAudioCallCount < 3) {
+            post("sapf~: DEBUG - No valid audio: hasValidAudio=%s, audioThread=%s", 
+                 x && x->hasValidAudio ? "true" : "false",
+                 x && x->audioThread ? "valid" : "null");
+            noAudioCallCount++;
+        }
+        
+        for (long chan = 0; chan < numouts; chan++) {
+            if (chan == 0 && numins > 0 && ins) {
+                // Pass-through first input to first output (legacy)
+                for (long i = 0; i < n; i++) {
+                    outs[chan][i] = ins[0][i] + (x ? x->offset : 0.0);
                 }
             } else {
-                // Additional outputs: silence
-                for (int i = 0; i < (int)sampleframes; i++) {
-                    outBuffer[i] = 0.0;
+                // Silence for other channels
+                for (long i = 0; i < n; i++) {
+                    outs[chan][i] = 0.0;
                 }
             }
         }
@@ -1074,9 +1118,8 @@ void sapf_clear(t_sapf* x)
             post("sapf~: ✓ Cleared %zu items from stack", stackDepth);
             
             // Thread-safe clearing of audio state since stack was cleared
-            os_unfair_lock_lock(&x->audioStateLock);
-            x->hasValidAudio = false;
-            os_unfair_lock_unlock(&x->audioStateLock);
+            // Lock-free atomic update
+            x->hasValidAudio = 0;
             
             post("sapf~: Audio state cleared due to stack clear");
             
