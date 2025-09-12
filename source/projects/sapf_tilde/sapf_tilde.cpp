@@ -9,6 +9,7 @@
 #include <dispatch/dispatch.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include "Manta.h"
+#include "ErrorCodes.hpp"
 
 // Forward declarations for sapf builtin initialization functions
 extern void AddCoreOps();
@@ -63,6 +64,7 @@ void sapf_dsp64(t_sapf* x, t_object* dsp64, short* count, double samplerate, lon
 void sapf_perform64(t_sapf* x, t_object* dsp64, double** ins, long numins, double** outs, long numouts, long sampleframes, long flags, void* userparam);
 void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv);
 void sapf_status(t_sapf* x);
+void sapf_help(t_sapf* x);
 
 // global class pointer variable
 static t_class* sapf_class = NULL;
@@ -95,6 +97,61 @@ void initSapfBuiltins() {
     }
 }
 
+// Enhanced error reporting with specific error type detection and user guidance
+void reportSapfError(t_sapf* x, const char* codeBuffer, const std::exception& e) {
+    const char* errorMsg = e.what();
+    
+    // Check for specific error types and provide contextual guidance
+    if (strstr(errorMsg, "Undefined")) {
+        error("sapf~: ✗ Undefined symbol in: \"%s\"", codeBuffer);
+        post("sapf~: Error: %s", errorMsg);
+        post("sapf~: Hint: Check function names - available: sinosc, play, +, -, *, /, etc.");
+        post("sapf~: Try: '440 0 sinosc 0.3 *' or send 'status' for VM info");
+        
+    } else if (strstr(errorMsg, "stack underflow") || strstr(errorMsg, "Stack underflow")) {
+        error("sapf~: ✗ Stack underflow in: \"%s\"", codeBuffer);
+        post("sapf~: Error: %s", errorMsg);
+        post("sapf~: Hint: Not enough arguments for operation");
+        post("sapf~: Example: '440 sinosc' needs frequency argument first");
+        
+    } else if (strstr(errorMsg, "stack overflow") || strstr(errorMsg, "Stack overflow")) {
+        error("sapf~: ✗ Stack overflow in: \"%s\"", codeBuffer);
+        post("sapf~: Error: %s", errorMsg);
+        post("sapf~: Hint: Too many values on stack - simplify expression");
+        
+    } else if (strstr(errorMsg, "syntax") || strstr(errorMsg, "Syntax")) {
+        error("sapf~: ✗ Syntax error in: \"%s\"", codeBuffer);
+        post("sapf~: Error: %s", errorMsg);
+        post("sapf~: Hint: Check parentheses, quotes, and operators");
+        post("sapf~: Valid: '440 0 sinosc' Invalid: '440 sinosc('");
+        
+    } else if (strstr(errorMsg, "type") || strstr(errorMsg, "Type")) {
+        error("sapf~: ✗ Type error in: \"%s\"", codeBuffer);
+        post("sapf~: Error: %s", errorMsg);
+        post("sapf~: Hint: Wrong argument type - check number vs audio vs array");
+        
+    } else if (strstr(errorMsg, "range") || strstr(errorMsg, "Range")) {
+        error("sapf~: ✗ Range error in: \"%s\"", codeBuffer);
+        post("sapf~: Error: %s", errorMsg);
+        post("sapf~: Hint: Value out of valid range - check array indices, frequencies");
+        
+    } else if (strstr(errorMsg, "memory") || strstr(errorMsg, "alloc")) {
+        error("sapf~: ✗ Memory error in: \"%s\"", codeBuffer);
+        post("sapf~: Error: %s", errorMsg);
+        post("sapf~: Hint: Out of memory - try simpler code or restart Max");
+        
+    } else {
+        // Generic error with basic guidance
+        error("sapf~: ✗ Compilation error: %s", errorMsg);
+        post("sapf~: Code: \"%s\"", codeBuffer);
+        post("sapf~: Hint: Try simpler expressions like '440 sinosc' or send 'status'");
+    }
+    
+    // Always provide general help
+    post("sapf~: For help: send 'status' for VM info, or try basic examples:");
+    post("sapf~: '440 0 sinosc' (sine wave) or '220 330 + 0 sinosc' (math)");
+}
+
 //***********************************************************************************************
 
 void ext_main(void* r)
@@ -110,6 +167,7 @@ void ext_main(void* r)
     class_addmethod(c, (method)sapf_assist, "assist",   A_CANT,  0);
     class_addmethod(c, (method)sapf_code,   "code",     A_GIMME, 0);
     class_addmethod(c, (method)sapf_status, "status",   0);
+    class_addmethod(c, (method)sapf_help,   "help",     0);
 
     class_dspinit(c);
     class_register(CLASS_BOX, c);
@@ -170,7 +228,7 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
             
             // Mark as failed
             x->compilationError = true;
-            strncpy(x->errorMessage, "VM initialization failed", sizeof(x->errorMessage) - 1);
+            strncpy_zero(x->errorMessage, "VM initialization failed", sizeof(x->errorMessage) - 1);
         }
     }
     return (x);
@@ -220,6 +278,7 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         error("sapf~: VM not initialized - object creation may have failed");
         x->compilationError = true;
         strncpy_zero(x->errorMessage, "VM not initialized", sizeof(x->errorMessage) - 1);
+        x->errorMessage[sizeof(x->errorMessage) - 1] = '\0';
         return;
     }
     
@@ -263,6 +322,7 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
             default:
                 error("sapf~: Unsupported atom type %d at position %ld", argv[i].a_type, i);
                 strncpy_zero(atomStr, "?", sizeof(atomStr) - 1);
+                atomStr[sizeof(atomStr) - 1] = '\0';
                 break;
         }
         
@@ -278,12 +338,12 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         
         // Add space if not first atom
         if (i > 0) {
-            strncat(codeBuffer, " ", sizeof(codeBuffer) - strlen(codeBuffer) - 1);
+            strncat_zero(codeBuffer, " ", sizeof(codeBuffer) - strlen(codeBuffer) - 1);
             bufferUsed++;
         }
         
         // Add the atom string
-        strncat(codeBuffer, atomStr, sizeof(codeBuffer) - strlen(codeBuffer) - 1);
+        strncat_zero(codeBuffer, atomStr, sizeof(codeBuffer) - strlen(codeBuffer) - 1);
         bufferUsed += atomLen;
     }
     
@@ -347,6 +407,20 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
                 } catch (const std::exception& e) {
                     error("sapf~: ✗ Execution error: %s", e.what());
                     x->hasValidAudio = false;
+                    
+                    // Provide execution-specific error guidance
+                    post("sapf~: Code compiled successfully but failed during execution");
+                    
+                    if (strstr(e.what(), "stack underflow") || strstr(e.what(), "Stack underflow")) {
+                        post("sapf~: Hint: Function called without enough arguments");
+                        post("sapf~: Example: 'sinosc' needs frequency and phase - try '440 0 sinosc'");
+                    } else if (strstr(e.what(), "type") || strstr(e.what(), "Type")) {
+                        post("sapf~: Hint: Wrong argument type during execution");
+                        post("sapf~: Check if numbers are used where audio is expected");
+                    } else {
+                        post("sapf~: Hint: Runtime error - try simpler expressions first");
+                        post("sapf~: Basic test: '440 0 sinosc 0.3 *'");
+                    }
                 }
                 
                 // Update cached code string with memory safety
@@ -395,25 +469,21 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
             }
             
         } catch (const std::exception& e) {
-            // Exception during compilation - handle gracefully
+            // Exception during compilation - handle gracefully with enhanced error reporting
             x->compilationError = true;
             x->hasValidAudio = false;
             
             snprintf_zero(x->errorMessage, sizeof(x->errorMessage), "Exception: %s", e.what());
             
-            error("sapf~: ✗ Compilation exception: %s", e.what());
-            post("sapf~: Code: %s", codeBuffer);
-            
-            // Could add exception-specific recovery hints
-            if (strstr(e.what(), "memory") || strstr(e.what(), "alloc")) {
-                post("sapf~: Hint: Try simpler code or restart Max to free memory");
-            }
+            // Use enhanced error reporting for better user guidance
+            reportSapfError(x, codeBuffer, e);
         } catch (...) {
             // Catch any other exceptions
             x->compilationError = true;
             x->hasValidAudio = false;
             
             strncpy_zero(x->errorMessage, "Unknown exception during compilation", sizeof(x->errorMessage) - 1);
+            x->errorMessage[sizeof(x->errorMessage) - 1] = '\0';
             
             error("sapf~: ✗ Unknown error during compilation of: %s", codeBuffer);
             post("sapf~: This may indicate a serious VM issue - consider restarting Max");
@@ -572,4 +642,55 @@ void sapf_perform64(t_sapf* x, t_object* dsp64, double** ins, long numins, doubl
             *outL++ = *inL++ + x->offset;
         }
     }
+}
+
+void sapf_help(t_sapf* x)
+{
+    post("sapf~: === SAPF LANGUAGE HELP ===");
+    post("");
+    
+    post("sapf~ is a Max external that embeds the sapf language interpreter");
+    post("SAPF (Sound As Pure Form) is a functional, stack-based audio programming language");
+    post("");
+    
+    post("Basic Usage:");
+    post("  Send 'code <expression>' messages to compile and execute sapf code");
+    post("  Example: [code 440 0 sinosc 0.3 *(");
+    post("");
+    
+    post("Common Commands:");
+    post("  status  - Show VM status and current state");  
+    post("  help    - Show this help message");
+    post("");
+    
+    post("Basic Examples:");
+    post("  440 0 sinosc                - 440Hz sine wave");
+    post("  440 0 sinosc 0.3 *          - Sine wave at 30% volume");  
+    post("  220 330 + 0 sinosc          - Math: (220+330)Hz sine wave");
+    post("  440 0 sawtooth               - 440Hz sawtooth wave");
+    post("  100 300 linterp 0 sinosc     - Linear interpolation between 100-300Hz");
+    post("");
+    
+    post("Key Concepts:");
+    post("  • Stack-based: Arguments come before functions");
+    post("  • Postfix notation: '2 3 +' means 2+3");
+    post("  • Audio-rate: Most operations work on audio signals");
+    post("  • Functional: Pure functions with no side effects");
+    post("");
+    
+    post("Common Functions:");
+    post("  Oscillators: sinosc, sawtooth, square, pulse, noise");
+    post("  Math: +, -, *, /, sin, cos, exp, log");
+    post("  Audio: *, +, mix, pan, delay, reverb");  
+    post("  Control: linterp, clip, wrap, fold");
+    post("");
+    
+    post("Error Help:");
+    post("  • Stack underflow: Not enough arguments (try '440 0 sinosc' not 'sinosc')");
+    post("  • Undefined symbol: Function name not found (check spelling)"); 
+    post("  • Type error: Wrong argument type (number vs audio signal)");
+    post("");
+    
+    post("For more info: Send 'status' to check VM state");
+    post("sapf~ version with full sapf language interpreter embedded");
 }
