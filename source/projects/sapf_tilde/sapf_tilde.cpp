@@ -10,6 +10,15 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include "Manta.h"
 
+// Forward declarations for sapf builtin initialization functions
+extern void AddCoreOps();
+extern void AddMathOps();
+extern void AddStreamOps();
+extern void AddUGenOps();
+extern void AddSetOps();
+extern void AddRandomOps();
+extern void AddMidiOps();
+
 #include "ext.h" // standard Max include, always required (except in Jitter)
 #include "ext_obex.h" // required for "new" style objects
 #include "z_dsp.h" // required for MSP objects
@@ -58,6 +67,34 @@ void sapf_status(t_sapf* x);
 // global class pointer variable
 static t_class* sapf_class = NULL;
 
+// Flag to track if sapf builtins have been initialized globally
+static bool gSapfBuiltinsInitialized = false;
+
+// Initialize all sapf built-in functions
+void initSapfBuiltins() {
+    if (gSapfBuiltinsInitialized) return; // Already initialized
+    
+    post("sapf~: Initializing sapf built-in functions...");
+    
+    try {
+        AddCoreOps();
+        AddMathOps();
+        AddStreamOps();
+        AddRandomOps();
+        AddUGenOps();  // This includes AddOscilUGenOps() which has sinosc
+        AddMidiOps();
+        AddSetOps();
+        
+        gSapfBuiltinsInitialized = true;
+        post("sapf~: Built-in functions initialized successfully");
+        
+    } catch (const std::exception& e) {
+        error("sapf~: Error initializing built-ins: %s", e.what());
+    } catch (...) {
+        error("sapf~: Unknown error initializing built-ins");
+    }
+}
+
 //***********************************************************************************************
 
 void ext_main(void* r)
@@ -94,6 +131,9 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
         
         // Initialize sapf VM components
         try {
+            // Initialize sapf built-in functions (only once globally)
+            initSapfBuiltins();
+            
             // Create sapf execution thread
             x->sapfThread = new Thread();
 
@@ -333,14 +373,25 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
                 x->hasValidAudio = false;
                 
                 // Try to get more detailed error information from sapf
-                // For now, use a generic message - could enhance with sapf error details
-                const char* errorDetail = "Unknown compilation error";
+                // Check if it's a parsing issue or function creation issue
+                const char* errorDetail;
+                if (!newCompiledFunction) {
+                    errorDetail = "Function creation failed after parsing";
+                } else {
+                    errorDetail = "Parser returned false (syntax error)";
+                }
+                
                 snprintf_zero(x->errorMessage, sizeof(x->errorMessage), "Compilation failed: %s", errorDetail);
                 
-                error("sapf~: ✗ Compilation failed for: %s", codeBuffer);
-                post("sapf~: Check sapf syntax and try again");
+                error("sapf~: ✗ Compilation failed for: \"%s\"", codeBuffer);
+                post("sapf~: Error: %s", errorDetail);
+                post("sapf~: Check sapf syntax - try simple expressions like '440 sinosc'");
                 
-                // TODO: Could add syntax hints or error position information
+                // Debug: Print some context about what was being parsed
+                post("sapf~: Code length: %zu characters", strlen(codeBuffer));
+                if (strlen(codeBuffer) > 0) {
+                    post("sapf~: First char: '%c' (0x%02x)", codeBuffer[0], (unsigned char)codeBuffer[0]);
+                }
             }
             
         } catch (const std::exception& e) {
