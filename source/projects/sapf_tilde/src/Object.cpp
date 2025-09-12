@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cstdarg>
 
+// DISABLED: because it conflicts with Max's post()
 // void post(const char* fmt, ...)
 // {
 //     va_list vargs;

@@ -68,8 +68,8 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 172.0, 114.0, 58.0, 22.0 ],
-					"text" : "code 1+1"
+					"patching_rect" : [ 172.0, 114.0, 159.0, 22.0 ],
+					"text" : "code 800 0 sinosc 0.3 * play"
 				}
 
 			}
