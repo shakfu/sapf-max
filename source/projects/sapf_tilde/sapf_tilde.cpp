@@ -18,8 +18,30 @@
 // struct to represent the object's state
 typedef struct _sapf
 {
-    t_pxobject ob; // the object itself (t_pxobject in MSP instead of t_object)
+    t_pxobject ob; // the object itself (Max MSP object)
+    
+    // Legacy field (can be removed later)
     double offset; // the value of a property of our object
+    
+    // Sapf execution context
+    Thread* sapfThread; // Main sapf execution thread
+    
+    // Compiled sapf code cache
+    P<Fun> compiledFunction; // Currently compiled sapf function
+    char* lastSapfCode; // Last compiled sapf code string for change detection
+    
+    // Audio extraction interface
+    ZIn audioExtractor; // Interface for extracting audio from sapf results
+    bool hasValidAudio; // Flag indicating if audioExtractor contains valid audio data
+    
+    // Error handling and status
+    bool compilationError; // True if last compilation failed
+    char errorMessage[256]; // Last error message for debugging
+    
+    // Sample rate synchronization
+    double currentSampleRate; // Current sample rate from Max
+    bool sampleRateChanged; // Flag to trigger VM reconfiguration
+    
 } t_sapf;
 
 // method prototypes
@@ -58,9 +80,51 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
 
     if (x) {
         dsp_setup((t_pxobject*)x, 1); // MSP inlets: arg is # of inlets and is REQUIRED!
-        // use 0 if you don't need inlets
         outlet_new(x, "signal"); // signal outlet (note "signal" rather than NULL)
+        
+        // Legacy field initialization
         x->offset = 0.0;
+        
+        // Initialize sapf VM components
+        try {
+            // Create sapf execution thread
+            x->sapfThread = new Thread();
+            
+            // Initialize compiled function storage
+            x->compiledFunction = P<Fun>(); // Initialize empty smart pointer
+            x->lastSapfCode = nullptr; // No cached code yet
+            
+            // Initialize audio extraction interface
+            x->audioExtractor = ZIn(); // Initialize empty ZIn
+            x->hasValidAudio = false;
+            
+            // Initialize error handling
+            x->compilationError = false;
+            x->errorMessage[0] = '\0'; // Empty error message
+            
+            // Initialize sample rate tracking
+            x->currentSampleRate = kDefaultSampleRate; // Default until sapf_dsp64 sets it
+            x->sampleRateChanged = true; // Force initial configuration
+            
+            post("sapf~: Initialized with sapf language interpreter");
+            
+        } catch (const std::exception& e) {
+            post("sapf~: Error initializing sapf VM: %s", e.what());
+            
+            // Cleanup on failure
+            if (x->sapfThread) {
+                delete x->sapfThread;
+                x->sapfThread = nullptr;
+            }
+            if (x->lastSapfCode) {
+                free(x->lastSapfCode);
+                x->lastSapfCode = nullptr;
+            }
+            
+            // Mark as failed
+            x->compilationError = true;
+            strncpy(x->errorMessage, "VM initialization failed", sizeof(x->errorMessage) - 1);
+        }
     }
     return (x);
 }
