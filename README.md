@@ -1,6 +1,6 @@
 # sapf-max
 
-A early-stage project to wrap the [sapf language](https://github.com/lfnoise/sapf) in a Max/MSP external.
+An early-stage project to wrap the [sapf language](https://github.com/lfnoise/sapf) in a Max/MSP external.
 
 
 
