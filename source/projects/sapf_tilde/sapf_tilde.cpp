@@ -63,7 +63,7 @@ void ext_main(void* r)
     // unless you need to free allocated memory, in which case you should call dsp_free from
     // your custom free function.
 
-    t_class* c = class_new("sapf~", (method)sapf_new, (method)dsp_free, (long)sizeof(t_sapf), 0L, A_GIMME, 0);
+    t_class* c = class_new("sapf~", (method)sapf_new, (method)sapf_free, (long)sizeof(t_sapf), 0L, A_GIMME, 0);
 
     class_addmethod(c, (method)sapf_float, "float", A_FLOAT, 0);
     class_addmethod(c, (method)sapf_dsp64, "dsp64", A_CANT, 0);
@@ -129,10 +129,36 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
     return (x);
 }
 
-// NOT CALLED!, we use dsp_free for a generic free function
 void sapf_free(t_sapf* x)
 {
-    ;
+    if (!x) return; // Safety check
+    
+    post("sapf~: Cleaning up sapf VM resources");
+    
+    // Clean up sapf Thread (manually allocated)
+    if (x->sapfThread) {
+        try {
+            delete x->sapfThread;
+            x->sapfThread = nullptr;
+        } catch (const std::exception& e) {
+            post("sapf~: Error cleaning up Thread: %s", e.what());
+        }
+    }
+    
+    // Clean up cached sapf code string (manually allocated)
+    if (x->lastSapfCode) {
+        free(x->lastSapfCode);
+        x->lastSapfCode = nullptr;
+    }
+    
+    // Smart pointers (P<Fun>) clean up automatically via destructor
+    // ZIn objects clean up automatically via destructor
+    // Primitive types (bool, double, char[]) clean up automatically
+
+    // must call dsp_free here
+    dsp_free((t_pxobject*)x);
+
+    post("sapf~: Cleanup complete");
 }
 
 void sapf_assist(t_sapf* x, void* b, long m, long a, char* s)
