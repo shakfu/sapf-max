@@ -212,7 +212,7 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
             x->errorMessage[0] = '\0'; // Empty error message
             
             // Initialize sample rate tracking
-            x->currentSampleRate = kDefaultSampleRate; // Default until sapf_dsp64 sets it
+            x->currentSampleRate = sys_getsr(); // Default until sapf_dsp64 sets it
             x->sampleRateChanged = true; // Force initial configuration
             
             // Initialize thread synchronization
@@ -613,7 +613,50 @@ void sapf_float(t_sapf* x, double f)
 // registers a function for the signal chain in Max
 void sapf_dsp64(t_sapf* x, t_object* dsp64, short* count, double samplerate, long maxvectorsize, long flags)
 {
-    post("my sample rate is: %f", samplerate);
+    if (!x) {
+        error("sapf~: Invalid object in dsp64");
+        return;
+    }
+    
+    post("sapf~: Max sample rate: %.1f Hz, vector size: %ld", samplerate, maxvectorsize);
+
+    // Check if sample rate has actually changed
+    bool rateChanged = (x->currentSampleRate != samplerate);
+    x->currentSampleRate = samplerate;
+
+    if (rateChanged || x->sampleRateChanged) {
+        try {
+            // Configure global sapf VM with Max's sample rate
+            vm.setSampleRate(samplerate);
+            
+            // Clear the sample rate changed flag
+            x->sampleRateChanged = false;
+            
+            post("sapf~: ✓ Configured sapf VM with sample rate: %.1f Hz", samplerate);
+            
+            // Update Thread rate context if thread exists
+            if (x->sapfThread) {
+                // The Thread automatically gets the updated rate from vm.ar when needed
+                post("sapf~: ✓ Thread will use updated rate context");
+            }
+            
+        } catch (const std::exception& e) {
+            error("sapf~: Error configuring VM sample rate: %s", e.what());
+            x->sampleRateChanged = true; // Keep flag set to retry later
+            
+            // Mark VM as in error state for diagnostics
+            if (x) {
+                x->compilationError = true;
+                snprintf_zero(x->errorMessage, sizeof(x->errorMessage), 
+                             "VM sample rate config failed: %s", e.what());
+            }
+        } catch (...) {
+            error("sapf~: Unknown error configuring VM sample rate");
+            x->sampleRateChanged = true; // Keep flag set to retry later
+        }
+    } else {
+        post("sapf~: Sample rate unchanged (%.1f Hz)", samplerate);
+    }
 
     // instead of calling dsp_add(), we send the "dsp_add64" message to the object representing the dsp chain
     // the arguments passed are:
