@@ -441,14 +441,15 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
                     }
                     
                     if (postStackDepth > 0) {
-                        // Get the top result from execution
-                        V audioResult = x->sapfThread->pop();
+                        // Get the top result from execution WITHOUT popping it (preserve stack for inspection)
+                        V audioResult = x->sapfThread->top();
                         
-                        // Check for remaining items on stack (potential issue)
-                        size_t remainingItems = x->sapfThread->stackDepth();
-                        if (remainingItems > 0) {
-                            post("sapf~: ⚠ %zu items remain on stack after result extraction", remainingItems);
-                            post("sapf~: Hint: Expression may produce multiple values - only using top result");
+                        post("sapf~: Using top stack value for audio (stack preserved for inspection)");
+                        
+                        // Check for multiple items on stack
+                        if (postStackDepth > 1) {
+                            post("sapf~: ⚠ %zu items on stack - using top item, others preserved", postStackDepth);
+                            post("sapf~: Hint: Send 'stack' to inspect all values or 'clear' to empty");
                         }
 
                         // Check if result is audio-compatible (ZIn compatible)
@@ -832,6 +833,7 @@ void sapf_help(t_sapf* x)
     post("  help    - Show this help message");
     post("  stack   - Inspect current sapf stack contents");
     post("  clear   - Clear sapf stack (removes all values)");
+    post("  Note: Stack values are preserved after code execution for debugging");
     post("");
     
     post("Basic Examples:");
@@ -860,6 +862,7 @@ void sapf_help(t_sapf* x)
     post("  • Stack underflow: Not enough arguments (try '440 0 sinosc' not 'sinosc')");
     post("  • Undefined symbol: Function name not found (check spelling)"); 
     post("  • Type error: Wrong argument type (number vs audio signal)");
+    post("  • Stack debugging: Use 'stack' to see values, 'clear' to empty");
     post("");
     
     post("For more info: Send 'status' to check VM state");
