@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include "primes.hpp"
 #include <complex>
+#include <vector>
 #include <dispatch/dispatch.h>
 #include <CoreFoundation/CoreFoundation.h>
 #include "Manta.h"
@@ -95,11 +96,11 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
         try {
             // Create sapf execution thread
             x->sapfThread = new Thread();
-            
+
             // Initialize compiled function storage
             x->compiledFunction = P<Fun>(); // Initialize empty smart pointer
             x->lastSapfCode = nullptr; // No cached code yet
-            
+
             // Initialize audio extraction interface
             x->audioExtractor = ZIn(); // Initialize empty ZIn
             x->hasValidAudio = false;
@@ -270,10 +271,43 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
             // Attempt compilation with comprehensive error capture
             P<Fun> newCompiledFunction;
             bool success = x->sapfThread->compile(codeBuffer, newCompiledFunction, true);
-            
+
             if (success && newCompiledFunction) {
                 // Successful compilation - update all state
                 x->compiledFunction = newCompiledFunction;
+
+                // Execute the compiled sapf code to generate audio result
+                try {
+                    // Clear previous audio state
+                    x->hasValidAudio = false;
+
+                    // Execute the compiled function
+                    newCompiledFunction->apply(*x->sapfThread);
+
+                    // Check if execution produced audio results on the stack
+                    if (x->sapfThread->stackDepth() > 0) {
+                        // Get the top result from execution
+                        V audioResult = x->sapfThread->pop();
+
+                        // Check if result is audio-compatible (ZIn compatible)
+                        if (audioResult.isZIn()) {
+                            // Set up audio extraction interface
+                            x->audioExtractor.set(audioResult);
+                            x->hasValidAudio = true;
+
+                            post("sapf~: ✓ Audio result ready for playback");
+                        } else {
+                            post("sapf~: ⚠ Code executed but result is not audio-compatible");
+                            post("sapf~: Result type: %s", audioResult.isReal() ? "number" : "object");
+                        }
+                    } else {
+                        post("sapf~: ⚠ Code executed but produced no results");
+                    }
+
+                } catch (const std::exception& e) {
+                    error("sapf~: ✗ Execution error: %s", e.what());
+                    x->hasValidAudio = false;
+                }
                 
                 // Update cached code string with memory safety
                 if (x->lastSapfCode) {
@@ -288,7 +322,7 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
                 }
                 
                 // Report success with details
-                post("sapf~: ✓ Compilation successful - function ready for audio generation");
+                post("sapf~: ✓ Compilation and execution complete");
                 
                 // TODO: Could add function introspection here
                 // e.g., post("sapf~: Function takes %d inputs, produces %d outputs", ...)
@@ -444,10 +478,47 @@ void sapf_perform64(t_sapf* x, t_object* dsp64, double** ins, long numins, doubl
 {
     t_double* inL = ins[0]; // we get audio for each inlet of the object from the **ins argument
     t_double* outL = outs[0]; // we get audio for each outlet of the object from the **outs argument
-    int n = sampleframes;
+    int n = (int)sampleframes;
 
-    // this perform method simply copies the input to the output, offsetting the value
-    while (n--) {
-        *outL++ = *inL++ + x->offset;
+    // Check if we have valid sapf audio to output
+    if (x && x->hasValidAudio && x->sapfThread) {
+        try {
+            // Create temporary float buffer for ZIn::fill (which expects float*)
+            // We'll then convert to Max's double format
+            std::vector<float> floatBuffer(sampleframes);
+            
+            // Use sapf's audio extraction to fill temporary buffer
+            bool audioAvailable = x->audioExtractor.fill(*x->sapfThread, n, floatBuffer.data(), 1);
+            
+            if (audioAvailable) {
+                // Convert from float to double for Max's buffer
+                for (int i = 0; i < (int)sampleframes; i++) {
+                    outL[i] = (double)floatBuffer[i];
+                }
+            } else {
+                // Audio stream ended - fill with silence
+                for (int i = 0; i < (int)sampleframes; i++) {
+                    outL[i] = 0.0;
+                }
+                // Mark audio as no longer valid (stream ended)
+                x->hasValidAudio = false;
+                // Note: Avoid posting in audio thread
+            }
+            
+        } catch (const std::exception& e) {
+            // Exception in audio thread - fill with silence and mark as failed
+            for (int i = 0; i < (int)sampleframes; i++) {
+                outL[i] = 0.0;
+            }
+            x->hasValidAudio = false;
+            // Note: Avoid posting in audio thread - handle error state in non-audio thread
+        }
+        
+    } else {
+        // No valid sapf audio - fall back to simple pass-through with offset
+        // (This maintains backward compatibility and provides some output for testing)
+        while (n--) {
+            *outL++ = *inL++ + x->offset;
+        }
     }
 }
