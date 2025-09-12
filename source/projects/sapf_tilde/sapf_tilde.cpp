@@ -8,6 +8,7 @@
 #include <vector>
 #include <dispatch/dispatch.h>
 #include <CoreFoundation/CoreFoundation.h>
+#include <os/lock.h>
 #include "Manta.h"
 #include "ErrorCodes.hpp"
 
@@ -52,6 +53,9 @@ typedef struct _sapf
     // Sample rate synchronization
     double currentSampleRate; // Current sample rate from Max
     bool sampleRateChanged; // Flag to trigger VM reconfiguration
+    
+    // Thread synchronization for real-time audio safety
+    os_unfair_lock audioStateLock; // Protects audio-related shared state
     
 } t_sapf;
 
@@ -211,6 +215,9 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
             x->currentSampleRate = kDefaultSampleRate; // Default until sapf_dsp64 sets it
             x->sampleRateChanged = true; // Force initial configuration
             
+            // Initialize thread synchronization
+            x->audioStateLock = OS_UNFAIR_LOCK_INIT;
+            
             post("sapf~: Initialized with sapf language interpreter");
             
         } catch (const std::exception& e) {
@@ -366,7 +373,11 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
             // Clear previous compilation state
             x->compilationError = false;
             x->errorMessage[0] = '\0';
+            
+            // Thread-safe clearing of audio state during compilation
+            os_unfair_lock_lock(&x->audioStateLock);
             x->hasValidAudio = false;
+            os_unfair_lock_unlock(&x->audioStateLock);
             
             // Attempt compilation with comprehensive error capture
             P<Fun> newCompiledFunction;
@@ -378,9 +389,6 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
 
                 // Execute the compiled sapf code to generate audio result
                 try {
-                    // Clear previous audio state
-                    x->hasValidAudio = false;
-
                     // Execute the compiled function
                     newCompiledFunction->apply(*x->sapfThread);
 
@@ -391,12 +399,19 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
 
                         // Check if result is audio-compatible (ZIn compatible)
                         if (audioResult.isZIn()) {
-                            // Set up audio extraction interface
+                            // Thread-safe update of audio state
+                            os_unfair_lock_lock(&x->audioStateLock);
                             x->audioExtractor.set(audioResult);
                             x->hasValidAudio = true;
+                            os_unfair_lock_unlock(&x->audioStateLock);
 
                             post("sapf~: ✓ Audio result ready for playback");
                         } else {
+                            // Clear audio state if result is not audio-compatible
+                            os_unfair_lock_lock(&x->audioStateLock);
+                            x->hasValidAudio = false;
+                            os_unfair_lock_unlock(&x->audioStateLock);
+                            
                             post("sapf~: ⚠ Code executed but result is not audio-compatible");
                             post("sapf~: Result type: %s", audioResult.isReal() ? "number" : "object");
                         }
@@ -406,7 +421,11 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
 
                 } catch (const std::exception& e) {
                     error("sapf~: ✗ Execution error: %s", e.what());
+                    
+                    // Thread-safe clearing of audio state on execution error
+                    os_unfair_lock_lock(&x->audioStateLock);
                     x->hasValidAudio = false;
+                    os_unfair_lock_unlock(&x->audioStateLock);
                     
                     // Provide execution-specific error guidance
                     post("sapf~: Code compiled successfully but failed during execution");
@@ -444,7 +463,11 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
             } else {
                 // Compilation failed - set comprehensive error state
                 x->compilationError = true;
+                
+                // Thread-safe clearing of audio state on compilation failure
+                os_unfair_lock_lock(&x->audioStateLock);
                 x->hasValidAudio = false;
+                os_unfair_lock_unlock(&x->audioStateLock);
                 
                 // Try to get more detailed error information from sapf
                 // Check if it's a parsing issue or function creation issue
@@ -480,7 +503,11 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         } catch (...) {
             // Catch any other exceptions
             x->compilationError = true;
+            
+            // Thread-safe clearing of audio state on unknown exception
+            os_unfair_lock_lock(&x->audioStateLock);
             x->hasValidAudio = false;
+            os_unfair_lock_unlock(&x->audioStateLock);
             
             strncpy_zero(x->errorMessage, "Unknown exception during compilation", sizeof(x->errorMessage) - 1);
             x->errorMessage[sizeof(x->errorMessage) - 1] = '\0';
@@ -542,11 +569,16 @@ void sapf_status(t_sapf* x)
         post("sapf~: Last Code: (none)");
     }
     
-    // Audio Status
-    if (x->hasValidAudio) {
-        post("sapf~: Audio: ✓ Ready for audio generation");
+    // Audio Status (thread-safe read)
+    bool audioStatus;
+    os_unfair_lock_lock(&x->audioStateLock);
+    audioStatus = x->hasValidAudio;
+    os_unfair_lock_unlock(&x->audioStateLock);
+    
+    if (audioStatus) {
+        post("sapf~: Audio: ✓ Ready for audio generation (thread-safe)");
     } else {
-        post("sapf~: Audio: ○ No audio data generated yet");
+        post("sapf~: Audio: ○ No audio data generated yet (thread-safe)");
     }
     
     // Sample Rate Status
@@ -601,15 +633,28 @@ void sapf_perform64(t_sapf* x, t_object* dsp64, double** ins, long numins, doubl
     t_double* outL = outs[0]; // we get audio for each outlet of the object from the **outs argument
     int n = (int)sampleframes;
 
-    // Check if we have valid sapf audio to output
-    if (x && x->hasValidAudio && x->sapfThread) {
+    // Thread-safe check for valid sapf audio
+    bool hasValidAudio = false;
+    ZIn audioExtractor; // Local copy for thread safety
+    
+    if (x && x->sapfThread) {
+        // Briefly lock to copy audio state
+        os_unfair_lock_lock(&x->audioStateLock);
+        hasValidAudio = x->hasValidAudio;
+        if (hasValidAudio) {
+            audioExtractor = x->audioExtractor; // Copy the ZIn
+        }
+        os_unfair_lock_unlock(&x->audioStateLock);
+    }
+    
+    if (hasValidAudio) {
         try {
             // Create temporary float buffer for ZIn::fill (which expects float*)
             // We'll then convert to Max's double format
             std::vector<float> floatBuffer(sampleframes);
             
-            // Use sapf's audio extraction to fill temporary buffer
-            bool audioAvailable = x->audioExtractor.fill(*x->sapfThread, n, floatBuffer.data(), 1);
+            // Use sapf's audio extraction to fill temporary buffer with local copy
+            bool audioAvailable = audioExtractor.fill(*x->sapfThread, n, floatBuffer.data(), 1);
             
             if (audioAvailable) {
                 // Convert from float to double for Max's buffer
@@ -621,8 +666,10 @@ void sapf_perform64(t_sapf* x, t_object* dsp64, double** ins, long numins, doubl
                 for (int i = 0; i < (int)sampleframes; i++) {
                     outL[i] = 0.0;
                 }
-                // Mark audio as no longer valid (stream ended)
+                // Thread-safely mark audio as no longer valid (stream ended)
+                os_unfair_lock_lock(&x->audioStateLock);
                 x->hasValidAudio = false;
+                os_unfair_lock_unlock(&x->audioStateLock);
                 // Note: Avoid posting in audio thread
             }
             
@@ -631,7 +678,10 @@ void sapf_perform64(t_sapf* x, t_object* dsp64, double** ins, long numins, doubl
             for (int i = 0; i < (int)sampleframes; i++) {
                 outL[i] = 0.0;
             }
+            // Thread-safely mark audio as failed
+            os_unfair_lock_lock(&x->audioStateLock);
             x->hasValidAudio = false;
+            os_unfair_lock_unlock(&x->audioStateLock);
             // Note: Avoid posting in audio thread - handle error state in non-audio thread
         }
         
