@@ -131,6 +131,40 @@ void initSapfBuiltins()
     }
 }
 
+// Forward declarations for refactored sapf_code functions
+struct ValidationResult {
+    bool success;
+    std::string codeBuffer;
+    std::string errorMessage;
+};
+
+struct CompilationResult {
+    bool success;
+    P<Fun> compiledFunction;
+    std::string errorMessage;
+};
+
+struct ExecutionResult {
+    bool success;
+    V audioResult;
+    size_t stackDepth;
+    std::string errorMessage;
+};
+
+struct AudioProcessingResult {
+    bool success;
+    bool hasValidAudio;
+    int numChannels;
+    std::string errorMessage;
+};
+
+ValidationResult sapf_validateInput(t_sapf* x, t_symbol* s, long argc, t_atom* argv);
+CompilationResult sapf_compileCode(t_sapf* x, const std::string& codeBuffer, bool needsRecompilation);
+ExecutionResult sapf_executeCode(t_sapf* x, P<Fun> compiledFunction);
+AudioProcessingResult sapf_processAudioResult(t_sapf* x, const V& audioResult);
+AudioProcessingResult sapf_handleMultiChannelAudio(t_sapf* x, const V& audioResult, const char* resultType);
+void sapf_reportStatus(t_sapf* x, bool compilationError, bool hasValidAudio, P<Fun> compiledFunction);
+
 // Enhanced error reporting with specific error type detection and user
 // guidance
 void reportSapfError(t_sapf* x, const char* codeBuffer, const std::exception& e)
@@ -219,8 +253,6 @@ void ext_main(void* r)
 void* sapf_new(t_symbol* s, long argc, t_atom* argv)
 {
     t_sapf* x = (t_sapf*)object_alloc(sapf_class);
-
-    post("hello");
 
     if (x) {
         dsp_setup((t_pxobject*)x,
@@ -345,708 +377,53 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
 {
     post("sapf~: DEBUG - sapf_code entry, argc=%ld", argc);
 
-    // Enhanced validation and early error handling
-    if (!x) {
-        error("sapf~: FATAL - Invalid object pointer (x is null)");
+    // Phase 1: Input validation and code string construction
+    ValidationResult validation = sapf_validateInput(x, s, argc, argv);
+    if (!validation.success) {
+        error("sapf~: FATAL - %s", validation.errorMessage.c_str());
         return;
     }
 
     post("sapf~: DEBUG - x pointer valid (%p)", x);
-
-    if (!x->sapfThread) {
-        error("sapf~: FATAL - sapfThread is null");
-        return;
-    }
-
     post("sapf~: DEBUG - sapfThread valid (%p)", x->sapfThread);
-
-    if (!x->audioThread) {
-        error("sapf~: FATAL - audioThread is null");
-        return;
-    }
-
     post("sapf~: DEBUG - audioThread valid (%p)", x->audioThread);
     post("sapf~: DEBUG - All critical pointers validated successfully");
 
-    // Input validation
-    if (argc == 0) {
-        post("sapf~: No code provided");
-        return;
-    }
-
-    // Report current error state if applicable
-    if (x->compilationError) {
-        post("sapf~: Warning - VM in error state: %s", x->errorMessage);
-        post("sapf~: Attempting to compile new code...");
-    }
-
-    // Construct sapf code string from Max message atoms with buffer overflow
-    // protection
-    char codeBuffer[CODE_BUFFER_SIZE]; // Buffer for sapf code
-    codeBuffer[0] = '\0';
-    size_t bufferUsed = 0;
-
-    for (long i = 0; i < argc; i++) {
-        char atomStr[256];
-
-        // Convert atom to string with type validation
-        switch (argv[i].a_type) {
-        case A_LONG:
-            snprintf_zero(atomStr, sizeof(atomStr), "%ld", argv[i].a_w.w_long);
-            break;
-        case A_FLOAT:
-            snprintf_zero(atomStr, sizeof(atomStr), "%g", argv[i].a_w.w_float);
-            break;
-        case A_SYM:
-            if (argv[i].a_w.w_sym && argv[i].a_w.w_sym->s_name) {
-                strncpy_zero(atomStr, argv[i].a_w.w_sym->s_name, sizeof(atomStr) - 1);
-                atomStr[sizeof(atomStr) - 1] = '\0';
-            } else {
-                error("sapf~: Invalid symbol atom at position %ld", i);
-                return;
-            }
-            break;
-        default:
-            error("sapf~: Unsupported atom type %d at position %ld", argv[i].a_type, i);
-            strncpy_zero(atomStr, "?", sizeof(atomStr) - 1);
-            atomStr[sizeof(atomStr) - 1] = '\0';
-            break;
-        }
-
-        // Calculate required space: current atom + space (if not first) + null
-        // terminator
-        size_t atomLen = strlen(atomStr);
-        size_t spaceNeeded = atomLen + (i > 0 ? 1 : 0) + 1; // +1 for space, +1 for null term
-
-        // Check for buffer overflow
-        if (bufferUsed + spaceNeeded > sizeof(codeBuffer)) {
-            error("sapf~: Code string too long - truncated at %zu characters", bufferUsed);
-            break;
-        }
-
-        // Add space if not first atom
-        if (i > 0) {
-            strncat_zero(codeBuffer, " ", sizeof(codeBuffer) - strlen(codeBuffer) - 1);
-            bufferUsed++;
-        }
-
-        // Add the atom string
-        strncat_zero(codeBuffer, atomStr, sizeof(codeBuffer) - strlen(codeBuffer) - 1);
-        bufferUsed += atomLen;
-    }
-
-    // Final validation
-    if (strlen(codeBuffer) == 0) {
-        post("sapf~: No valid code generated from input");
-        return;
-    }
-
-    // Check for 'play' command and provide user guidance
-    if (strstr(codeBuffer, "play")) {
-        post("sapf~: Warning - 'play' command detected in code");
-        post("sapf~: The Max external automatically outputs audio - remove "
-             "'play' from your code");
-        post("sapf~: Original: %s", codeBuffer);
-
-        // Remove 'play' from the code string for processing
-        char* playPos = strstr(codeBuffer, " play");
-        if (playPos) {
-            *playPos = '\0'; // Truncate at 'play' command
-            post("sapf~: Automatically removing 'play' - using: %s", codeBuffer);
-        } else {
-            // Handle case where 'play' is at the beginning or standalone
-            playPos = strstr(codeBuffer, "play");
-            if (playPos == codeBuffer) {
-                // 'play' is at the beginning - this leaves an empty string
-                post("sapf~: Code starts with 'play' - removing it leaves no "
-                     "audio generation code");
-                post("sapf~: Try: 440 0 sinosc 0.3 * instead of: play");
-                return; // Exit early since no meaningful code remains
-            }
-        }
-
-        // Re-validate string length after play removal
-        if (strlen(codeBuffer) == 0) {
-            post("sapf~: No valid code remains after removing 'play' command");
-            return;
-        }
-    }
+    std::string codeBuffer = validation.codeBuffer;
 
     // Check if code has changed (for caching)
     bool needsRecompilation = true;
     if (x->lastSapfCode) {
-        needsRecompilation = (strcmp(codeBuffer, x->lastSapfCode) != 0);
+        needsRecompilation = (codeBuffer != std::string(x->lastSapfCode));
     }
 
-    // COMPLEX EXPRESSIONS work by here
-
-    if (needsRecompilation) {
-        post("sapf~: Compiling sapf code: %s", codeBuffer);
-
-        try {
-            // Clear previous compilation state
-            x->compilationError = false;
-            x->errorMessage[0] = '\0';
-
-            // Clear audio state during compilation (atomic)
-            x->hasValidAudio = 0; // Atomic write
-
-            // Attempt compilation with comprehensive error capture
-            P<Fun> newCompiledFunction;
-
-            post("sapf~: DEBUG - Starting compilation of: %s", codeBuffer);
-            post("sapf~: DEBUG - About to call x->sapfThread->compile()");
-            post("sapf~: DEBUG - sapfThread pointer: %p", x->sapfThread);
-
-            bool success = false;
-
-            try {
-                post("sapf~: DEBUG - Calling compile method...");
-
-                // Additional safety check before compilation
-                if (!x->sapfThread) {
-                    post("sapf~: DEBUG - sapfThread is null during "
-                         "compilation");
-                    success = false;
-                } else {
-                    // Ensure the function pointer is properly initialized to
-                    // null
-                    newCompiledFunction = P<Fun>(); // Reset to null
-
-                    success = x->sapfThread->compile(codeBuffer, newCompiledFunction, true);
-                    post("sapf~: DEBUG - Compilation phase completed, "
-                         "success=%s",
-                         success ? "true" : "false");
-
-                    // Additional validation of the compiled function
-                    if (success && !newCompiledFunction) {
-                        post("sapf~: DEBUG - Compilation reported success but "
-                             "function is null");
-                        success = false;
-                    }
-                }
-            } catch (const std::exception& e) {
-                post("sapf~: DEBUG - Exception during compilation: %s", e.what());
-                success = false;
-                newCompiledFunction = P<Fun>(); // Ensure function is null on
-                                                // error
-            } catch (...) {
-                post("sapf~: DEBUG - Unknown exception during compilation");
-                success = false;
-                newCompiledFunction = P<Fun>(); // Ensure function is null on
-                                                // error
-            }
-
-            // COMPLEX EXPRESSIONS work by here
-
-            post("sapf~: DEBUG - Checking compilation results: success=%s, "
-                 "function=%s",
-                 success ? "true" : "false", newCompiledFunction ? "valid" : "null");
-
-            if (success && newCompiledFunction) {
-                post("sapf~: DEBUG - Compilation successful, updating "
-                     "state...");
-                // Successful compilation - update all state
-                x->compiledFunction = newCompiledFunction;
-                post("sapf~: DEBUG - Function stored successfully");
-
-                // Execute the compiled sapf code to generate audio result
-                try {
-                    // Clear stack before execution to ensure clean state
-                    size_t preStackDepth = x->sapfThread->stackDepth();
-                    if (preStackDepth > 0) {
-                        post("sapf~: Clearing %zu items from stack before "
-                             "execution",
-                             preStackDepth);
-                        x->sapfThread->clearStack();
-                    }
-
-                    // Execute the compiled function with additional safety
-                    // checks
-                    post("sapf~: DEBUG - Starting execution...");
-                    try {
-                        // Verify thread and function are still valid before
-                        // execution
-                        if (!x->sapfThread) {
-                            throw std::runtime_error("sapfThread became null before execution");
-                        }
-                        if (!newCompiledFunction) {
-                            throw std::runtime_error("newCompiledFunction became null before "
-                                                     "execution");
-                        }
-
-                        // Additional safety: check if the function has valid
-                        // internal state
-                        post("sapf~: DEBUG - Function and thread validated, "
-                             "calling apply...");
-                        newCompiledFunction->apply(*x->sapfThread);
-                        post("sapf~: DEBUG - Execution completed successfully");
-
-                        // Verify thread is still valid after execution
-                        if (!x->sapfThread) {
-                            throw std::runtime_error("sapfThread became null during execution");
-                        }
-
-                    } catch (const std::exception& e) {
-                        post("sapf~: DEBUG - Exception during execution: %s", e.what());
-                        throw; // Re-throw to be caught by outer handler
-                    } catch (...) {
-                        post("sapf~: DEBUG - Unknown exception during "
-                             "execution");
-                        throw; // Re-throw to be caught by outer handler
-                    }
-
-                    // Check execution results and manage stack state with
-                    // safety checks
-                    if (!x->sapfThread) {
-                        throw std::runtime_error("sapfThread became null after execution");
-                    }
-
-                    size_t postStackDepth = x->sapfThread->stackDepth();
-                    post("sapf~: Execution completed, stack depth: %zu", postStackDepth);
-
-                    // Debug: Print stack contents after execution
-                    if (postStackDepth > 0) {
-                        try {
-                            V topValue = x->sapfThread->top();
-                            post("sapf~: DEBUG - Top stack value type: %s",
-                                 topValue.isZIn()          ? "ZIn"
-                                     : topValue.isList()   ? "List"
-                                     : topValue.isReal()   ? "Real"
-                                     : topValue.isObject() ? "Object"
-                                                           : "Unknown");
-                        } catch (const std::exception& e) {
-                            post("sapf~: DEBUG - Error accessing top stack "
-                                 "value: %s",
-                                 e.what());
-                            // Continue with reduced functionality rather than
-                            // crashing
-                        }
-                    }
-
-                    // Check for stack overflow conditions
-                    const size_t MAX_REASONABLE_STACK_DEPTH = 100;
-                    if (postStackDepth > MAX_REASONABLE_STACK_DEPTH) {
-                        post("sapf~: ⚠ WARNING: Very large stack depth (%zu "
-                             "items)",
-                             postStackDepth);
-                        post("sapf~: This may indicate runaway computation or "
-                             "inefficient code");
-                        post("sapf~: Consider sending 'clear' to reset stack");
-                    }
-
-                    if (postStackDepth > 0) {
-                        try {
-                            // Additional safety check before accessing stack
-                            if (!x->sapfThread) {
-                                throw std::runtime_error("sapfThread became null when processing "
-                                                         "results");
-                            }
-
-                            // Get the top result from execution WITHOUT
-                            // popping it (preserve stack for inspection)
-                            V audioResult = x->sapfThread->top();
-
-                            post("sapf~: Using top stack value for audio "
-                                 "(stack preserved for inspection)");
-
-                            // Check for multiple items on stack
-                            if (postStackDepth > 1) {
-                                post("sapf~: ⚠ %zu items on stack - using top "
-                                     "item, others preserved",
-                                     postStackDepth);
-                                post("sapf~: Hint: Send 'stack' to inspect "
-                                     "all values or 'clear' to empty");
-                            }
-
-                            // Enhanced multi-channel audio result processing
-                            // with safe type checking
-                            const char* resultType = "Unknown";
-                            try {
-                                if (audioResult.isReal()) {
-                                    resultType = "Real";
-                                } else if (audioResult.isObject()) {
-                                    Object* objPtr = audioResult.o();
-                                    if (objPtr != nullptr) {
-                                        // Safe type checking using TypeName
-                                        // instead of type methods
-                                        const char* typeName = objPtr->TypeName();
-                                        if (typeName != nullptr) {
-                                            resultType = typeName;
-                                        } else {
-                                            resultType = "CorruptedObject";
-                                        }
-                                    } else {
-                                        resultType = "NullObject";
-                                    }
-                                } else {
-                                    resultType = "Other";
-                                }
-                            } catch (...) {
-                                resultType = "ExceptionDuringTypeCheck";
-                            }
-
-                            post("sapf~: DEBUG - Processing audio result, "
-                                 "type: %s",
-                                 resultType);
-
-                            try {
-
-                                // Add defensive validation before calling
-                                // isZIn() to prevent crashes
-                                bool isValidZIn = false;
-                                try {
-                                    // First check if it's an object and the
-                                    // object pointer is valid
-                                    if (audioResult.isObject()) {
-                                        Object* objPtr = audioResult.o();
-                                        if (objPtr != nullptr) {
-                                            // Perform a basic sanity check by
-                                            // trying to get the type name This
-                                            // will access the vtable, which
-                                            // crashes if the object is
-                                            // corrupted
-                                            const char* typeName = objPtr->TypeName();
-                                            if (typeName != nullptr) {
-                                                // Object seems valid, now
-                                                // safely call isZIn()
-                                                isValidZIn = audioResult.isZIn();
-                                                post("sapf~: DEBUG - Object "
-                                                     "type: %s, isZIn: %s",
-                                                     typeName, isValidZIn ? "true" : "false");
-                                            } else {
-                                                post("sapf~: DEBUG - Object "
-                                                     "has null TypeName, "
-                                                     "treating as invalid");
-                                            }
-                                        } else {
-                                            post("sapf~: DEBUG - Object "
-                                                 "pointer is null");
-                                        }
-                                    } else {
-                                        // For non-objects (reals), isZIn()
-                                        // should return false safely
-                                        isValidZIn = audioResult.isZIn();
-                                        post("sapf~: DEBUG - Non-object "
-                                             "value, isZIn: %s",
-                                             isValidZIn ? "true" : "false");
-                                    }
-                                } catch (const std::exception& e) {
-                                    post("sapf~: DEBUG - Exception during "
-                                         "isZIn() validation: %s",
-                                         e.what());
-                                    isValidZIn = false;
-                                } catch (...) {
-                                    post("sapf~: DEBUG - Unknown exception "
-                                         "during isZIn() "
-                                         "validation");
-                                    isValidZIn = false;
-                                }
-
-                                // COMPLEX EXPRESSIONS work by here
-
-                                if (isValidZIn) {
-                                    // Single channel audio result (ZList)
-                                    // Lock-free atomic updates
-                                    x->audioExtractor.set(audioResult);
-                                    x->numAudioChannels = 1;
-
-                                    ATOMIC_INCREMENT(&x->audioStateVersion);
-                                    x->hasValidAudio = 1;
-
-                                    post("sapf~: ✓ Single-channel audio "
-                                         "result ready for playback");
-
-                                } else if (resultType != nullptr
-                                           && (strcmp(resultType, "VList") == 0 || strcmp(resultType, "ZList") == 0)) {
-
-                                    // Potential multi-channel audio result
-                                    // (List of ZLists)
-                                    try {
-                                        P<List> resultList = (List*)audioResult.o();
-                                        if (resultList && resultList->isFinite()) {
-                                            Array* channels = resultList->mArray();
-                                            if (channels == nullptr) {
-                                                post("sapf~: ERROR - mArray() returned null pointer");
-                                                success = false;
-                                                throw std::runtime_error("mArray() returned null pointer");
-                                            }
-                                            int numChannels = std::min((int)channels->size(), 8); // Limit to 8 channels
-                                            post("sapf~: DEBUG - numChannels calculated: %d", numChannels);
-                                            if (numChannels > 0) {
-                                                // Lock removed - using atomic
-                                                // operations
-                                                // Check if all list elements
-                                                // are audio-compatible
-                                                bool allAudioCompatible = true;
-                                                for (int i = 0; i < numChannels; i++) {
-                                                    if (i >= (int)channels->size()) {
-                                                        post("sapf~: ERROR - Channel index %d out of bounds (size: %d)", i, (int)channels->size());
-                                                        allAudioCompatible = false;
-                                                        break;
-                                                    }
-                                                    V channelData = channels->at(i);
-                                                    // Safe type checking for
-                                                    // channelData
-                                                    bool isChannelAudio = false;
-                                                    try {
-                                                        if (channelData.isReal()) {
-                                                            isChannelAudio = false; // Raw
-                                                                                    // numbers
-                                                                                    // aren't
-                                                                                    // audio
-                                                        } else if (channelData.isObject()) {
-                                                            Object* channelObj = channelData.o();
-                                                            if (channelObj != nullptr) {
-                                                                const char* channelTypeName = channelObj->TypeName();
-                                                                if (channelTypeName != nullptr
-                                                                    && strcmp(channelTypeName, "ZList") == 0) {
-                                                                    isChannelAudio = true;
-                                                                }
-                                                            }
-                                                        }
-                                                        post("sapf~: DEBUG - Processing channel %d, type check completed", i);
-                                                    } catch (...) {
-                                                        isChannelAudio = false;
-                                                    }
-
-                                                    if (isChannelAudio) {
-                                                        x->audioExtractors[i].set(channelData);
-                                                    } else {
-                                                        allAudioCompatible = false;
-                                                        break;
-                                                    }
-                                                }
-                                                
-                                                if (allAudioCompatible) {
-                                                    x->numAudioChannels = numChannels;
-                                                    x->hasValidAudio = 1;
-                                                    // Unlock removed - using
-                                                    // atomic operations
-
-                                                    post("sapf~: ✓ %d-channel "
-                                                         "audio result ready "
-                                                         "for playbook",
-                                                         numChannels);
-                                                } else {
-                                                    x->hasValidAudio = 0;
-                                                    // Unlock removed - using
-                                                    // atomic operations
-
-                                                    post("sapf~: ⚠ List "
-                                                         "contains non-audio "
-                                                         "elements - using "
-                                                         "single channel "
-                                                         "fallback");
-                                                    // Fall back to single
-                                                    // channel processing Lock
-                                                    // removed - using atomic
-                                                    // operations
-                                                    x->audioExtractor.set(audioResult);
-                                                    x->numAudioChannels = 1;
-                                                    x->hasValidAudio = 1;
-                                                    // Unlock removed - using
-                                                    // atomic operations
-                                                }
-                                            } else {
-                                                // Lock removed - using atomic
-                                                // operations
-                                                x->hasValidAudio = 0;
-                                                // Unlock removed - using
-                                                // atomic operations
-
-                                                post("sapf~: ⚠ Empty list - "
-                                                     "no audio channels");
-                                            }
-                                        } else {
-                                            // Infinite list - treat as single
-                                            // channel Lock removed - using
-                                            // atomic operations
-                                            x->audioExtractor.set(audioResult);
-                                            x->numAudioChannels = 1;
-                                            x->hasValidAudio = 1;
-                                            // Unlock removed - using atomic
-                                            // operations
-
-                                            post("sapf~: ✓ Infinite list "
-                                                 "treated as single-channel "
-                                                 "audio");
-                                        }
-                                    } catch (const std::exception& e) {
-                                        // Error processing list - fall back to
-                                        // single channel Lock removed - using
-                                        // atomic operations
-                                        x->audioExtractor.set(audioResult);
-                                        x->numAudioChannels = 1;
-                                        x->hasValidAudio = 1;
-                                        // Unlock removed - using atomic
-                                        // operations
-
-                                        post("sapf~: ⚠ List processing error: "
-                                             "%s - using single channel",
-                                             e.what());
-                                    }
-                                } else {
-                                    // Non-audio result
-                                    // Lock removed - using atomic operations
-                                    x->hasValidAudio = 0;
-                                    x->numAudioChannels = 0;
-                                    // Unlock removed - using atomic operations
-
-                                    post("sapf~: ⚠ Code executed but result "
-                                         "is not audio-compatible");
-                                    post("sapf~: Result type: %s", audioResult.isReal() ? "number" : "object");
-                                }
-                            } catch (const std::exception& e) {
-                                post("sapf~: DEBUG - Exception during audio "
-                                     "result processing: %s",
-                                     e.what());
-                                x->hasValidAudio = 0;
-                                throw; // Re-throw to outer handler
-                            } catch (...) {
-                                post("sapf~: DEBUG - Unknown exception during "
-                                     "audio result processing");
-                                x->hasValidAudio = 0;
-                                throw; // Re-throw to outer handler
-                            }
-                        } catch (const std::exception& e) {
-                            error("sapf~: Error processing stack results: %s", e.what());
-                            x->hasValidAudio = 0;
-                            post("sapf~: Continuing with no audio output due "
-                                 "to stack processing error");
-                        }
-
-                        // COMPLEX EXPRESSIONS crash before here
-
-                    } else {
-                        post("sapf~: ⚠ Code executed but produced no results "
-                             "on stack");
-                        post("sapf~: Hint: Ensure your sapf code produces a "
-                             "value (e.g., '440 0 sinosc')");
-                    }
-
-                } catch (const std::exception& e) {
-                    error("sapf~: ✗ Execution error: %s", e.what());
-
-                    // Thread-safe clearing of audio state on execution error
-                    // Lock removed - using atomic operations
-                    x->hasValidAudio = 0;
-                    // Unlock removed - using atomic operations
-
-                    // Provide execution-specific error guidance
-                    post("sapf~: Code compiled successfully but failed during "
-                         "execution");
-
-                    if (strstr(e.what(), "stack underflow") || strstr(e.what(), "Stack underflow")) {
-                        post("sapf~: Hint: Function called without enough "
-                             "arguments");
-                        post("sapf~: Example: 'sinosc' needs frequency and "
-                             "phase - try '440 0 sinosc'");
-                    } else if (strstr(e.what(), "type") || strstr(e.what(), "Type")) {
-                        post("sapf~: Hint: Wrong argument type during "
-                             "execution");
-                        post("sapf~: Check if numbers are used where audio is "
-                             "expected");
-                    } else {
-                        post("sapf~: Hint: Runtime error - try simpler "
-                             "expressions first");
-                        post("sapf~: Basic test: '440 0 sinosc 0.3 *'");
-                    }
-                }
-
-                // Update cached code string with memory safety
-                if (x->lastSapfCode) {
-                    free(x->lastSapfCode);
-                    x->lastSapfCode = nullptr;
-                }
-
-                x->lastSapfCode = strdup(codeBuffer);
-                if (!x->lastSapfCode) {
-                    error("sapf~: Memory allocation failed for code cache");
-                    // Continue anyway - compilation succeeded
-                }
-
-                // Report success with details
-                post("sapf~: ✓ Compilation and execution complete");
-
-                // TODO: Could add function introspection here
-                // e.g., post("sapf~: Function takes %d inputs, produces %d
-                // outputs", ...)
-
-            } else {
-                // Compilation failed - set comprehensive error state
-                x->compilationError = true;
-
-                // Thread-safe clearing of audio state on compilation failure
-                // Lock removed - using atomic operations
-                x->hasValidAudio = 0;
-                // Unlock removed - using atomic operations
-
-                // Try to get more detailed error information from sapf
-                // Check if it's a parsing issue or function creation issue
-                const char* errorDetail;
-                if (!newCompiledFunction) {
-                    errorDetail = "Function creation failed after parsing";
-                } else {
-                    errorDetail = "Parser returned false (syntax error)";
-                }
-
-                snprintf_zero(x->errorMessage, sizeof(x->errorMessage), "Compilation failed: %s", errorDetail);
-
-                error("sapf~: ✗ Compilation failed for: \"%s\"", codeBuffer);
-                post("sapf~: Error: %s", errorDetail);
-                post("sapf~: Check sapf syntax - try simple expressions like "
-                     "'440 sinosc'");
-
-                // Debug: Print some context about what was being parsed
-                post("sapf~: Code length: %zu characters", strlen(codeBuffer));
-                if (strlen(codeBuffer) > 0) {
-                    post("sapf~: First char: '%c' (0x%02x)", codeBuffer[0], (unsigned char)codeBuffer[0]);
-                }
-            }
-
-        } catch (const std::exception& e) {
-            // Exception during compilation - handle gracefully with enhanced
-            // error reporting
-            x->compilationError = true;
-            x->hasValidAudio = 0;
-
-            snprintf_zero(x->errorMessage, sizeof(x->errorMessage), "Exception: %s", e.what());
-
-            // Use enhanced error reporting for better user guidance
-            reportSapfError(x, codeBuffer, e);
-        } catch (...) {
-            // Catch any other exceptions
-            x->compilationError = true;
-
-            // Thread-safe clearing of audio state on unknown exception
-            // Lock-free atomic update
-            x->hasValidAudio = 0;
-
-            strncpy_zero(x->errorMessage, "Unknown exception during compilation", sizeof(x->errorMessage) - 1);
-            x->errorMessage[sizeof(x->errorMessage) - 1] = '\0';
-
-            error("sapf~: ✗ Unknown error during compilation of: %s", codeBuffer);
-            post("sapf~: This may indicate a serious VM issue - consider "
-                 "restarting Max");
+    // Phase 2: Compilation and caching logic
+    CompilationResult compilation = sapf_compileCode(x, codeBuffer, needsRecompilation);
+    if (!compilation.success) {
+        if (!compilation.errorMessage.empty()) {
+            error("sapf~: ✗ Compilation error: %s", compilation.errorMessage.c_str());
         }
+        return;
+    }
 
-    } else {
-        post("sapf~: ⚡ Using cached compilation for: %s", codeBuffer);
-
-        // Even for cached code, report current status
-        if (x->compilationError) {
-            post("sapf~: ⚠ Cached code is in error state: %s", x->errorMessage);
-        } else if (x->compiledFunction) {
-            post("sapf~: ✓ Cached function ready for audio generation");
-        } else {
-            post("sapf~: ⚠ Cached compilation exists but function is null");
+    // Phase 3: Function execution and stack management (only for new compilations)
+    if (needsRecompilation && compilation.compiledFunction) {
+        ExecutionResult execution = sapf_executeCode(x, compilation.compiledFunction);
+        if (!execution.success) {
+            if (!execution.errorMessage.empty()) {
+                error("sapf~: ✗ %s", execution.errorMessage.c_str());
+            }
+        } else if (execution.stackDepth > 0) {
+            // Phase 4: Audio result processing and type checking
+            AudioProcessingResult audioProcessing = sapf_processAudioResult(x, execution.audioResult);
+            if (!audioProcessing.success && !audioProcessing.errorMessage.empty()) {
+                error("sapf~: ✗ %s", audioProcessing.errorMessage.c_str());
+            }
         }
     }
 
-    // Final status summary
-    post("sapf~: Status - Error: %s, Audio: %s, Function: %s", x->compilationError ? "YES" : "NO",
-         x->hasValidAudio ? "READY" : "PENDING", x->compiledFunction ? "LOADED" : "NULL");
+    // Phase 5: Final status reporting
+    sapf_reportStatus(x, x->compilationError, x->hasValidAudio, x->compiledFunction);
 }
 
 void sapf_status(t_sapf* x)
@@ -1465,6 +842,651 @@ void sapf_stack(t_sapf* x)
     }
 
     post("sapf~: === END STACK ===");
+}
+
+// Input validation and code string construction
+ValidationResult sapf_validateInput(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
+{
+    ValidationResult result;
+    result.success = false;
+
+    // Enhanced validation and early error handling
+    if (!x) {
+        result.errorMessage = "Invalid object pointer (x is null)";
+        return result;
+    }
+
+    if (!x->sapfThread) {
+        result.errorMessage = "sapfThread is null";
+        return result;
+    }
+
+    if (!x->audioThread) {
+        result.errorMessage = "audioThread is null";
+        return result;
+    }
+
+    // Input validation
+    if (argc == 0) {
+        result.errorMessage = "No code provided";
+        return result;
+    }
+
+    // Report current error state if applicable
+    if (x->compilationError) {
+        post("sapf~: Warning - VM in error state: %s", x->errorMessage);
+        post("sapf~: Attempting to compile new code...");
+    }
+
+    // Construct sapf code string from Max message atoms with buffer overflow protection
+    char codeBuffer[CODE_BUFFER_SIZE];
+    codeBuffer[0] = '\0';
+    size_t bufferUsed = 0;
+
+    for (long i = 0; i < argc; i++) {
+        char atomStr[256];
+
+        // Convert atom to string with type validation
+        switch (argv[i].a_type) {
+        case A_LONG:
+            snprintf_zero(atomStr, sizeof(atomStr), "%ld", argv[i].a_w.w_long);
+            break;
+        case A_FLOAT:
+            snprintf_zero(atomStr, sizeof(atomStr), "%g", argv[i].a_w.w_float);
+            break;
+        case A_SYM:
+            if (argv[i].a_w.w_sym && argv[i].a_w.w_sym->s_name) {
+                strncpy_zero(atomStr, argv[i].a_w.w_sym->s_name, sizeof(atomStr) - 1);
+                atomStr[sizeof(atomStr) - 1] = '\0';
+            } else {
+                result.errorMessage = "Invalid symbol atom at position " + std::to_string(i);
+                return result;
+            }
+            break;
+        default:
+            result.errorMessage = "Unsupported atom type " + std::to_string(argv[i].a_type) + " at position " + std::to_string(i);
+            strncpy_zero(atomStr, "?", sizeof(atomStr) - 1);
+            atomStr[sizeof(atomStr) - 1] = '\0';
+            break;
+        }
+
+        // Calculate required space: current atom + space (if not first) + null terminator
+        size_t atomLen = strlen(atomStr);
+        size_t spaceNeeded = atomLen + (i > 0 ? 1 : 0) + 1; // +1 for space, +1 for null term
+
+        // Check for buffer overflow
+        if (bufferUsed + spaceNeeded > sizeof(codeBuffer)) {
+            result.errorMessage = "Code string too long - truncated at " + std::to_string(bufferUsed) + " characters";
+            return result;
+        }
+
+        // Add space if not first atom
+        if (i > 0) {
+            strncat_zero(codeBuffer, " ", sizeof(codeBuffer) - strlen(codeBuffer) - 1);
+            bufferUsed++;
+        }
+
+        // Add the atom string
+        strncat_zero(codeBuffer, atomStr, sizeof(codeBuffer) - strlen(codeBuffer) - 1);
+        bufferUsed += atomLen;
+    }
+
+    // Final validation
+    if (strlen(codeBuffer) == 0) {
+        result.errorMessage = "No valid code generated from input";
+        return result;
+    }
+
+    // Check for 'play' command and provide user guidance
+    if (strstr(codeBuffer, "play")) {
+        post("sapf~: Warning - 'play' command detected in code");
+        post("sapf~: The Max external automatically outputs audio - remove 'play' from your code");
+        post("sapf~: Original: %s", codeBuffer);
+
+        // Remove 'play' from the code string for processing
+        char* playPos = strstr(codeBuffer, " play");
+        if (playPos) {
+            *playPos = '\0'; // Truncate at 'play' command
+            post("sapf~: Automatically removing 'play' - using: %s", codeBuffer);
+        } else {
+            // Handle case where 'play' is at the beginning or standalone
+            playPos = strstr(codeBuffer, "play");
+            if (playPos == codeBuffer) {
+                result.errorMessage = "Code starts with 'play' - removing it leaves no audio generation code";
+                return result;
+            }
+        }
+
+        // Re-validate string length after play removal
+        if (strlen(codeBuffer) == 0) {
+            result.errorMessage = "No valid code remains after removing 'play' command";
+            return result;
+        }
+    }
+
+    result.success = true;
+    result.codeBuffer = std::string(codeBuffer);
+    return result;
+}
+
+// Compilation and caching logic
+CompilationResult sapf_compileCode(t_sapf* x, const std::string& codeBuffer, bool needsRecompilation)
+{
+    CompilationResult result;
+    result.success = false;
+
+    if (!needsRecompilation) {
+        post("sapf~: ⚡ Using cached compilation for: %s", codeBuffer.c_str());
+
+        if (x->compilationError) {
+            result.errorMessage = "Cached code is in error state: " + std::string(x->errorMessage);
+        } else if (x->compiledFunction) {
+            post("sapf~: ✓ Cached function ready for audio generation");
+            result.success = true;
+            result.compiledFunction = x->compiledFunction;
+        } else {
+            result.errorMessage = "Cached compilation exists but function is null";
+        }
+        return result;
+    }
+
+    post("sapf~: Compiling sapf code: %s", codeBuffer.c_str());
+
+    try {
+        // Clear previous compilation state
+        x->compilationError = false;
+        x->errorMessage[0] = '\0';
+
+        // Clear audio state during compilation (atomic)
+        x->hasValidAudio = 0;
+
+        // Attempt compilation with comprehensive error capture
+        P<Fun> newCompiledFunction;
+
+        post("sapf~: DEBUG - Starting compilation of: %s", codeBuffer.c_str());
+        post("sapf~: DEBUG - About to call x->sapfThread->compile()");
+        post("sapf~: DEBUG - sapfThread pointer: %p", x->sapfThread);
+
+        bool success = false;
+
+        try {
+            post("sapf~: DEBUG - Calling compile method...");
+
+            // Additional safety check before compilation
+            if (!x->sapfThread) {
+                post("sapf~: DEBUG - sapfThread is null during compilation");
+                success = false;
+            } else {
+                // Ensure the function pointer is properly initialized to null
+                newCompiledFunction = P<Fun>(); // Reset to null
+
+                success = x->sapfThread->compile(codeBuffer.c_str(), newCompiledFunction, true);
+                post("sapf~: DEBUG - Compilation phase completed, success=%s",
+                     success ? "true" : "false");
+
+                // Additional validation of the compiled function
+                if (success && !newCompiledFunction) {
+                    post("sapf~: DEBUG - Compilation reported success but function is null");
+                    success = false;
+                }
+            }
+        } catch (const std::exception& e) {
+            post("sapf~: DEBUG - Exception during compilation: %s", e.what());
+            success = false;
+            newCompiledFunction = P<Fun>(); // Ensure function is null on error
+        } catch (...) {
+            post("sapf~: DEBUG - Unknown exception during compilation");
+            success = false;
+            newCompiledFunction = P<Fun>(); // Ensure function is null on error
+        }
+
+        post("sapf~: DEBUG - Checking compilation results: success=%s, function=%s",
+             success ? "true" : "false", newCompiledFunction ? "valid" : "null");
+
+        if (success && newCompiledFunction) {
+            post("sapf~: DEBUG - Compilation successful, updating state...");
+            // Successful compilation - update all state
+            x->compiledFunction = newCompiledFunction;
+            post("sapf~: DEBUG - Function stored successfully");
+
+            result.success = true;
+            result.compiledFunction = newCompiledFunction;
+
+            // Update cached code string with memory safety
+            if (x->lastSapfCode) {
+                free(x->lastSapfCode);
+                x->lastSapfCode = nullptr;
+            }
+
+            x->lastSapfCode = strdup(codeBuffer.c_str());
+            if (!x->lastSapfCode) {
+                error("sapf~: Memory allocation failed for code cache");
+                // Continue anyway - compilation succeeded
+            }
+
+            post("sapf~: ✓ Compilation complete");
+        } else {
+            // Compilation failed - set comprehensive error state
+            x->compilationError = true;
+            x->hasValidAudio = 0;
+
+            // Try to get more detailed error information from sapf
+            const char* errorDetail;
+            if (!newCompiledFunction) {
+                errorDetail = "Function creation failed after parsing";
+            } else {
+                errorDetail = "Parser returned false (syntax error)";
+            }
+
+            snprintf_zero(x->errorMessage, sizeof(x->errorMessage), "Compilation failed: %s", errorDetail);
+            result.errorMessage = std::string(errorDetail);
+
+            error("sapf~: ✗ Compilation failed for: \"%s\"", codeBuffer.c_str());
+            post("sapf~: Error: %s", errorDetail);
+            post("sapf~: Check sapf syntax - try simple expressions like '440 sinosc'");
+
+            // Debug: Print some context about what was being parsed
+            post("sapf~: Code length: %zu characters", codeBuffer.length());
+            if (codeBuffer.length() > 0) {
+                post("sapf~: First char: '%c' (0x%02x)", codeBuffer[0], (unsigned char)codeBuffer[0]);
+            }
+        }
+
+    } catch (const std::exception& e) {
+        // Exception during compilation - handle gracefully with enhanced error reporting
+        x->compilationError = true;
+        x->hasValidAudio = 0;
+
+        snprintf_zero(x->errorMessage, sizeof(x->errorMessage), "Exception: %s", e.what());
+        result.errorMessage = std::string(e.what());
+
+        // Use enhanced error reporting for better user guidance
+        reportSapfError(x, codeBuffer.c_str(), e);
+    } catch (...) {
+        // Catch any other exceptions
+        x->compilationError = true;
+        x->hasValidAudio = 0;
+
+        strncpy_zero(x->errorMessage, "Unknown exception during compilation", sizeof(x->errorMessage) - 1);
+        x->errorMessage[sizeof(x->errorMessage) - 1] = '\0';
+        result.errorMessage = "Unknown exception during compilation";
+
+        error("sapf~: ✗ Unknown error during compilation of: %s", codeBuffer.c_str());
+        post("sapf~: This may indicate a serious VM issue - consider restarting Max");
+    }
+
+    return result;
+}
+
+// Function execution and stack management
+ExecutionResult sapf_executeCode(t_sapf* x, P<Fun> compiledFunction)
+{
+    ExecutionResult result;
+    result.success = false;
+    result.stackDepth = 0;
+
+    try {
+        // Clear stack before execution to ensure clean state
+        size_t preStackDepth = x->sapfThread->stackDepth();
+        if (preStackDepth > 0) {
+            post("sapf~: Clearing %zu items from stack before execution", preStackDepth);
+            x->sapfThread->clearStack();
+        }
+
+        // Execute the compiled function with additional safety checks
+        post("sapf~: DEBUG - Starting execution...");
+        try {
+            // Verify thread and function are still valid before execution
+            if (!x->sapfThread) {
+                throw std::runtime_error("sapfThread became null before execution");
+            }
+            if (!compiledFunction) {
+                throw std::runtime_error("compiledFunction became null before execution");
+            }
+
+            // Additional safety: check if the function has valid internal state
+            post("sapf~: DEBUG - Function and thread validated, calling apply...");
+            compiledFunction->apply(*x->sapfThread);
+            post("sapf~: DEBUG - Execution completed successfully");
+
+            // Verify thread is still valid after execution
+            if (!x->sapfThread) {
+                throw std::runtime_error("sapfThread became null during execution");
+            }
+
+        } catch (const std::exception& e) {
+            post("sapf~: DEBUG - Exception during execution: %s", e.what());
+            throw; // Re-throw to be caught by outer handler
+        } catch (...) {
+            post("sapf~: DEBUG - Unknown exception during execution");
+            throw; // Re-throw to be caught by outer handler
+        }
+
+        // Check execution results and manage stack state with safety checks
+        if (!x->sapfThread) {
+            throw std::runtime_error("sapfThread became null after execution");
+        }
+
+        size_t postStackDepth = x->sapfThread->stackDepth();
+        post("sapf~: Execution completed, stack depth: %zu", postStackDepth);
+        result.stackDepth = postStackDepth;
+
+        // Debug: Print stack contents after execution
+        if (postStackDepth > 0) {
+            try {
+                V topValue = x->sapfThread->top();
+                post("sapf~: DEBUG - Top stack value type: %s",
+                     topValue.isZIn()          ? "ZIn"
+                         : topValue.isList()   ? "List"
+                         : topValue.isReal()   ? "Real"
+                         : topValue.isObject() ? "Object"
+                                               : "Unknown");
+            } catch (const std::exception& e) {
+                post("sapf~: DEBUG - Error accessing top stack value: %s", e.what());
+                // Continue with reduced functionality rather than crashing
+            }
+        }
+
+        // Check for stack overflow conditions
+        const size_t MAX_REASONABLE_STACK_DEPTH = 100;
+        if (postStackDepth > MAX_REASONABLE_STACK_DEPTH) {
+            post("sapf~: ⚠ WARNING: Very large stack depth (%zu items)", postStackDepth);
+            post("sapf~: This may indicate runaway computation or inefficient code");
+            post("sapf~: Consider sending 'clear' to reset stack");
+        }
+
+        if (postStackDepth > 0) {
+            try {
+                // Additional safety check before accessing stack
+                if (!x->sapfThread) {
+                    throw std::runtime_error("sapfThread became null when processing results");
+                }
+
+                // Get the top result from execution WITHOUT popping it (preserve stack for inspection)
+                V audioResult = x->sapfThread->top();
+
+                post("sapf~: Using top stack value for audio (stack preserved for inspection)");
+
+                // Check for multiple items on stack
+                if (postStackDepth > 1) {
+                    post("sapf~: ⚠ %zu items on stack - using top item, others preserved", postStackDepth);
+                    post("sapf~: Hint: Send 'stack' to inspect all values or 'clear' to empty");
+                }
+
+                result.success = true;
+                result.audioResult = audioResult;
+
+            } catch (const std::exception& e) {
+                result.errorMessage = "Error processing stack results: " + std::string(e.what());
+                post("sapf~: Continuing with no audio output due to stack processing error");
+            }
+        } else {
+            result.errorMessage = "Code executed but produced no results on stack";
+            post("sapf~: ⚠ Code executed but produced no results on stack");
+            post("sapf~: Hint: Ensure your sapf code produces a value (e.g., '440 0 sinosc')");
+        }
+
+    } catch (const std::exception& e) {
+        result.errorMessage = "Execution error: " + std::string(e.what());
+        x->hasValidAudio = 0;
+
+        // Provide execution-specific error guidance
+        post("sapf~: Code compiled successfully but failed during execution");
+
+        if (strstr(e.what(), "stack underflow") || strstr(e.what(), "Stack underflow")) {
+            post("sapf~: Hint: Function called without enough arguments");
+            post("sapf~: Example: 'sinosc' needs frequency and phase - try '440 0 sinosc'");
+        } else if (strstr(e.what(), "type") || strstr(e.what(), "Type")) {
+            post("sapf~: Hint: Wrong argument type during execution");
+            post("sapf~: Check if numbers are used where audio is expected");
+        } else {
+            post("sapf~: Hint: Runtime error - try simpler expressions first");
+            post("sapf~: Basic test: '440 0 sinosc 0.3 *'");
+        }
+    }
+
+    return result;
+}
+
+// Audio result processing and type checking
+AudioProcessingResult sapf_processAudioResult(t_sapf* x, const V& audioResult)
+{
+    AudioProcessingResult result;
+    result.success = false;
+    result.hasValidAudio = false;
+    result.numChannels = 0;
+
+    // Enhanced multi-channel audio result processing with safe type checking
+    const char* resultType = "Unknown";
+    try {
+        if (audioResult.isReal()) {
+            resultType = "Real";
+        } else if (audioResult.isObject()) {
+            Object* objPtr = audioResult.o();
+            if (objPtr != nullptr) {
+                // Safe type checking using TypeName instead of type methods
+                const char* typeName = objPtr->TypeName();
+                if (typeName != nullptr) {
+                    resultType = typeName;
+                } else {
+                    resultType = "CorruptedObject";
+                }
+            } else {
+                resultType = "NullObject";
+            }
+        } else {
+            resultType = "Other";
+        }
+    } catch (...) {
+        resultType = "ExceptionDuringTypeCheck";
+    }
+
+    post("sapf~: DEBUG - Processing audio result, type: %s", resultType);
+
+    try {
+        // Add defensive validation before calling isZIn() to prevent crashes
+        bool isValidZIn = false;
+        try {
+            // First check if it's an object and the object pointer is valid
+            if (audioResult.isObject()) {
+                Object* objPtr = audioResult.o();
+                if (objPtr != nullptr) {
+                    // Perform a basic sanity check by trying to get the type name
+                    // This will access the vtable, which crashes if the object is corrupted
+                    const char* typeName = objPtr->TypeName();
+                    if (typeName != nullptr) {
+                        // Object seems valid, now safely call isZIn()
+                        isValidZIn = audioResult.isZIn();
+                        post("sapf~: DEBUG - Object type: %s, isZIn: %s",
+                             typeName, isValidZIn ? "true" : "false");
+                    } else {
+                        post("sapf~: DEBUG - Object has null TypeName, treating as invalid");
+                    }
+                } else {
+                    post("sapf~: DEBUG - Object pointer is null");
+                }
+            } else {
+                // For non-objects (reals), isZIn() should return false safely
+                isValidZIn = audioResult.isZIn();
+                post("sapf~: DEBUG - Non-object value, isZIn: %s", isValidZIn ? "true" : "false");
+            }
+        } catch (const std::exception& e) {
+            post("sapf~: DEBUG - Exception during isZIn() validation: %s", e.what());
+            isValidZIn = false;
+        } catch (...) {
+            post("sapf~: DEBUG - Unknown exception during isZIn() validation");
+            isValidZIn = false;
+        }
+
+        if (isValidZIn) {
+            // Single channel audio result (ZList)
+            // Lock-free atomic updates
+            x->audioExtractor.set(audioResult);
+            x->numAudioChannels = 1;
+
+            ATOMIC_INCREMENT(&x->audioStateVersion);
+            x->hasValidAudio = 1;
+
+            result.success = true;
+            result.hasValidAudio = true;
+            result.numChannels = 1;
+
+            post("sapf~: ✓ Single-channel audio result ready for playback");
+
+        } else if (resultType != nullptr
+                   && (strcmp(resultType, "VList") == 0 || strcmp(resultType, "ZList") == 0)) {
+
+            // Delegate to multi-channel handler
+            return sapf_handleMultiChannelAudio(x, audioResult, resultType);
+
+        } else {
+            // Non-audio result
+            x->hasValidAudio = 0;
+            x->numAudioChannels = 0;
+
+            result.errorMessage = "Code executed but result is not audio-compatible";
+            post("sapf~: ⚠ Code executed but result is not audio-compatible");
+            post("sapf~: Result type: %s", audioResult.isReal() ? "number" : "object");
+        }
+
+    } catch (const std::exception& e) {
+        result.errorMessage = "Exception during audio result processing: " + std::string(e.what());
+        x->hasValidAudio = 0;
+        post("sapf~: DEBUG - Exception during audio result processing: %s", e.what());
+    } catch (...) {
+        result.errorMessage = "Unknown exception during audio result processing";
+        x->hasValidAudio = 0;
+        post("sapf~: DEBUG - Unknown exception during audio result processing");
+    }
+
+    return result;
+}
+
+// Multi-channel audio processing
+AudioProcessingResult sapf_handleMultiChannelAudio(t_sapf* x, const V& audioResult, const char* resultType)
+{
+    AudioProcessingResult result;
+    result.success = false;
+    result.hasValidAudio = false;
+    result.numChannels = 0;
+
+    // Potential multi-channel audio result (List of ZLists)
+    try {
+        P<List> resultList = (List*)audioResult.o();
+        if (resultList && resultList->isFinite()) {
+            Array* channels = resultList->mArray();
+            if (channels == nullptr) {
+                result.errorMessage = "mArray() returned null pointer";
+                post("sapf~: ERROR - mArray() returned null pointer");
+                return result;
+            }
+
+            int numChannels = std::min((int)channels->size(), 8); // Limit to 8 channels
+            post("sapf~: DEBUG - numChannels calculated: %d", numChannels);
+
+            if (numChannels > 0) {
+                // Check if all list elements are audio-compatible
+                bool allAudioCompatible = true;
+                for (int i = 0; i < numChannels; i++) {
+                    if (i >= (int)channels->size()) {
+                        post("sapf~: ERROR - Channel index %d out of bounds (size: %d)", i, (int)channels->size());
+                        allAudioCompatible = false;
+                        break;
+                    }
+                    V channelData = channels->at(i);
+
+                    // Safe type checking for channelData
+                    bool isChannelAudio = false;
+                    try {
+                        if (channelData.isReal()) {
+                            isChannelAudio = false; // Raw numbers aren't audio
+                        } else if (channelData.isObject()) {
+                            Object* channelObj = channelData.o();
+                            if (channelObj != nullptr) {
+                                const char* channelTypeName = channelObj->TypeName();
+                                if (channelTypeName != nullptr
+                                    && strcmp(channelTypeName, "ZList") == 0) {
+                                    isChannelAudio = true;
+                                }
+                            }
+                        }
+                        post("sapf~: DEBUG - Processing channel %d, type check completed", i);
+                    } catch (...) {
+                        isChannelAudio = false;
+                    }
+
+                    if (isChannelAudio) {
+                        x->audioExtractors[i].set(channelData);
+                    } else {
+                        allAudioCompatible = false;
+                        break;
+                    }
+                }
+
+                if (allAudioCompatible) {
+                    x->numAudioChannels = numChannels;
+                    x->hasValidAudio = 1;
+
+                    result.success = true;
+                    result.hasValidAudio = true;
+                    result.numChannels = numChannels;
+
+                    post("sapf~: ✓ %d-channel audio result ready for playbook", numChannels);
+                } else {
+                    x->hasValidAudio = 0;
+
+                    post("sapf~: ⚠ List contains non-audio elements - using single channel fallback");
+                    // Fall back to single channel processing
+                    x->audioExtractor.set(audioResult);
+                    x->numAudioChannels = 1;
+                    x->hasValidAudio = 1;
+
+                    result.success = true;
+                    result.hasValidAudio = true;
+                    result.numChannels = 1;
+                }
+            } else {
+                x->hasValidAudio = 0;
+                result.errorMessage = "Empty list - no audio channels";
+                post("sapf~: ⚠ Empty list - no audio channels");
+            }
+        } else {
+            // Infinite list - treat as single channel
+            x->audioExtractor.set(audioResult);
+            x->numAudioChannels = 1;
+            x->hasValidAudio = 1;
+
+            result.success = true;
+            result.hasValidAudio = true;
+            result.numChannels = 1;
+
+            post("sapf~: ✓ Infinite list treated as single-channel audio");
+        }
+    } catch (const std::exception& e) {
+        // Error processing list - fall back to single channel
+        x->audioExtractor.set(audioResult);
+        x->numAudioChannels = 1;
+        x->hasValidAudio = 1;
+
+        result.success = true;
+        result.hasValidAudio = true;
+        result.numChannels = 1;
+        result.errorMessage = "List processing error: " + std::string(e.what()) + " - using single channel";
+
+        post("sapf~: ⚠ List processing error: %s - using single channel", e.what());
+    }
+
+    return result;
+}
+
+// Final status reporting
+void sapf_reportStatus(t_sapf* x, bool compilationError, bool hasValidAudio, P<Fun> compiledFunction)
+{
+    // Final status summary
+    post("sapf~: Status - Error: %s, Audio: %s, Function: %s",
+         compilationError ? "YES" : "NO",
+         hasValidAudio ? "READY" : "PENDING",
+         compiledFunction ? "LOADED" : "NULL");
 }
 
 void sapf_clear(t_sapf* x)
