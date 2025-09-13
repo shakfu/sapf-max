@@ -138,6 +138,8 @@ int main (int argc, const char * argv[])
 				} break;
 				default: 
 					post("unrecognized option -%c\n", c);
+					usage();
+					exit(0);
 			}
 		} else {
 			post("expected option, got \"%s\"\n", argv[i]);

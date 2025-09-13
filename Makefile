@@ -11,7 +11,7 @@ MAX_VERSIONS := 8 9
 all: build
 
 
-build:
+build: reset
 	@mkdir -p build && cd build && \
 		cmake .. && \
 		cmake --build . --config Release

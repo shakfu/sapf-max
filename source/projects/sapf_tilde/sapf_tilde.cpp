@@ -1336,8 +1336,66 @@ AudioProcessingResult sapf_processAudioResult(t_sapf* x, const V& audioResult)
         } else if (resultType != nullptr
                    && (strcmp(resultType, "VList") == 0 || strcmp(resultType, "ZList") == 0)) {
 
-            // Delegate to multi-channel handler
-            return sapf_handleMultiChannelAudio(x, audioResult, resultType);
+            // VList and ZList are single-channel audio results
+            // Treat them like ZIn objects for single-channel audio
+            x->audioExtractor.set(audioResult);
+            x->numAudioChannels = 1;
+
+            ATOMIC_INCREMENT(&x->audioStateVersion);
+            x->hasValidAudio = 1;
+
+            result.success = true;
+            result.hasValidAudio = true;
+            result.numChannels = 1;
+
+            post("sapf~: ✓ Single-channel audio result (%s) ready for playback", resultType);
+
+        } else if (audioResult.isList()) {
+            // Check if this is a list containing multiple audio objects (multi-channel)
+            try {
+                P<List> resultList = (List*)audioResult.o();
+                if (resultList && resultList->isFinite()) {
+                    Array* channels = resultList->mArray.get();
+                    if (channels != nullptr && channels->size() > 1) {
+                        // This might be a multi-channel audio list - delegate to multi-channel handler
+                        post("sapf~: DEBUG - Detected potential multi-channel list with %d elements", (int)channels->size());
+                        return sapf_handleMultiChannelAudio(x, audioResult, "List");
+                    } else {
+                        // Single element list or null array - treat as single-channel
+                        x->audioExtractor.set(audioResult);
+                        x->numAudioChannels = 1;
+                        x->hasValidAudio = 1;
+
+                        result.success = true;
+                        result.hasValidAudio = true;
+                        result.numChannels = 1;
+
+                        post("sapf~: ✓ Single-element list treated as single-channel audio");
+                    }
+                } else {
+                    // Infinite list - treat as single channel
+                    x->audioExtractor.set(audioResult);
+                    x->numAudioChannels = 1;
+                    x->hasValidAudio = 1;
+
+                    result.success = true;
+                    result.hasValidAudio = true;
+                    result.numChannels = 1;
+
+                    post("sapf~: ✓ Infinite list treated as single-channel audio");
+                }
+            } catch (const std::exception& e) {
+                // Error processing list - treat as single channel fallback
+                x->audioExtractor.set(audioResult);
+                x->numAudioChannels = 1;
+                x->hasValidAudio = 1;
+
+                result.success = true;
+                result.hasValidAudio = true;
+                result.numChannels = 1;
+
+                post("sapf~: ⚠ List processing error: %s - using single channel fallback", e.what());
+            }
 
         } else {
             // Non-audio result
@@ -1374,10 +1432,19 @@ AudioProcessingResult sapf_handleMultiChannelAudio(t_sapf* x, const V& audioResu
     try {
         P<List> resultList = (List*)audioResult.o();
         if (resultList && resultList->isFinite()) {
-            Array* channels = resultList->mArray();
+            Array* channels = resultList->mArray.get();
             if (channels == nullptr) {
-                result.errorMessage = "mArray() returned null pointer";
-                post("sapf~: ERROR - mArray() returned null pointer");
+                // mArray returned null - fall back to single channel processing
+                post("sapf~: DEBUG - mArray returned null, falling back to single channel");
+                x->audioExtractor.set(audioResult);
+                x->numAudioChannels = 1;
+                x->hasValidAudio = 1;
+
+                result.success = true;
+                result.hasValidAudio = true;
+                result.numChannels = 1;
+
+                post("sapf~: ✓ Null array fallback to single-channel audio");
                 return result;
             }
 
