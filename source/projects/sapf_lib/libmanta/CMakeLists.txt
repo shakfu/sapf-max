@@ -17,7 +17,7 @@ add_library(
 target_include_directories(
 	manta
 	PUBLIC
-	${CMAKE_SOURCE_DIR}/source/projects/sapf_tilde/include
+	${CMAKE_SOURCE_DIR}/source/projects/sapf_lib/include
 	${CMAKE_CURRENT_SOURCE_DIR}
 	${MANTA_SOURCE_DIR}/extern/hidapi/hidapi
 )

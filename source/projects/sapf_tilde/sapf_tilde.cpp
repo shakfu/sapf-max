@@ -14,6 +14,10 @@
 
 #define CODE_BUFFER_SIZE 4096
 
+// enums for inlets / outlets
+enum INLETS { I_INPUT, NUM_INLETS };
+enum OUTLETS { O_OUTPUT, NUM_OUTLETS };
+
 // Forward declarations for sapf builtin initialization functions
 extern void AddCoreOps();
 extern void AddMathOps();
@@ -89,6 +93,10 @@ void sapf_status(t_sapf* x);
 void sapf_help(t_sapf* x);
 void sapf_stack(t_sapf* x);
 void sapf_clear(t_sapf* x);
+
+// possibly useful funcs
+void initSapfBuiltins();
+void reportSapfError(t_sapf* x, const char* codeBuffer, const std::exception& e);
 
 // global class pointer variable
 static t_class* sapf_class = NULL;
@@ -1122,14 +1130,28 @@ void sapf_status(t_sapf* x)
     post("sapf~: === END STATUS ===");
 }
 
-void sapf_assist(t_sapf* x, void* b, long m, long a, char* s)
+
+void sapf_assist(t_sapf* x, void* b, long io, long idx, char* s)
 {
-    if (m == ASSIST_INLET) { // inlet
-        sprintf(s, "I am inlet %ld", a);
-    } else { // outlet
-        sprintf(s, "I am outlet %ld", a);
+    /* Document inlet functions */
+    if (io == ASSIST_INLET) {
+        switch (idx) {
+        case I_INPUT:
+            snprintf_zero(s, ASSIST_MAX_STRING_LEN, "%ld: input", idx);
+            break;
+        }
+    } 
+
+    /* Document outlet functions */
+    else if (io == ASSIST_OUTLET) {
+        switch (idx) {
+        case O_OUTPUT:
+            snprintf_zero(s, ASSIST_MAX_STRING_LEN, "%ld: output", idx);
+            break;
+        }
     }
 }
+
 
 void sapf_float(t_sapf* x, double f) { x->offset = f; }
 
