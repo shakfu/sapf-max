@@ -78,6 +78,8 @@ typedef struct _sapf {
     double currentSampleRate; // Current sample rate from Max
     bool sampleRateChanged;   // Flag to trigger VM reconfiguration
 
+    // non-audio outlet
+    void * text_outlet;
 } t_sapf;
 
 // method prototypes
@@ -255,10 +257,14 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
     t_sapf* x = (t_sapf*)object_alloc(sapf_class);
 
     if (x) {
-        dsp_setup((t_pxobject*)x,
-                  1); // MSP inlets: arg is # of inlets and is REQUIRED!
-        outlet_new(x,
-                   "signal"); // signal outlet (note "signal" rather than NULL)
+        // MSP inlets: arg is # of inlets and is REQUIRED!
+        dsp_setup((t_pxobject*)x, 1);
+        
+        // general (non-audio) outlet
+        x->text_outlet = outlet_new((t_object *)x, NULL);
+
+        // audio (signal) outlet
+        outlet_new(x, "signal"); // signal outlet (note "signal" rather than NULL)
 
         // Legacy field initialization
         x->offset = 0.0;
@@ -929,22 +935,20 @@ ValidationResult sapf_validateInput(t_sapf* x, t_symbol* s, long argc, t_atom* a
         return result;
     }
 
-    // Check for 'play' command and provide user guidance
+    // Check for 'play' command and handle it specially for Max integration
     if (strstr(codeBuffer, "play")) {
-        post("sapf~: Warning - 'play' command detected in code");
-        post("sapf~: The Max external automatically outputs audio - remove 'play' from your code");
-        post("sapf~: Original: %s", codeBuffer);
+        post("sapf~: ✓ 'play' command detected - will execute audio part and capture for Max output");
 
-        // Remove 'play' from the code string for processing
+        // Remove 'play' from the code string since we'll capture the audio data before it gets consumed
         char* playPos = strstr(codeBuffer, " play");
         if (playPos) {
             *playPos = '\0'; // Truncate at 'play' command
-            post("sapf~: Automatically removing 'play' - using: %s", codeBuffer);
+            post("sapf~: Executing audio generation part: %s", codeBuffer);
         } else {
             // Handle case where 'play' is at the beginning or standalone
             playPos = strstr(codeBuffer, "play");
             if (playPos == codeBuffer) {
-                result.errorMessage = "Code starts with 'play' - removing it leaves no audio generation code";
+                result.errorMessage = "Code consists only of 'play' - no audio generation code to execute";
                 return result;
             }
         }
@@ -954,6 +958,9 @@ ValidationResult sapf_validateInput(t_sapf* x, t_symbol* s, long argc, t_atom* a
             result.errorMessage = "No valid code remains after removing 'play' command";
             return result;
         }
+
+    } else {
+        post("sapf~: ⚠ No 'play' command - expression will leave result on stack");
     }
 
     result.success = true;
