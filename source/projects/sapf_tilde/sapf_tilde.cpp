@@ -584,14 +584,6 @@ void sapf_dsp64(t_sapf* x, t_object* dsp64, short* count, double samplerate, lon
         post("sapf~: Sample rate unchanged (%.1f Hz)", samplerate);
     }
 
-    // instead of calling dsp_add(), we send the "dsp_add64" message to the
-    // object representing the dsp chain the arguments passed are: 1: the dsp64
-    // object passed-in by the calling function 2: the symbol of the
-    // "dsp_add64" message we are sending 3: a pointer to your object 4: a
-    // pointer to your 64-bit perform method 5: flags to alter how the signal
-    // chain handles your object -- just pass 0 6: a generic pointer that you
-    // can use to pass any additional data to your perform method
-
     object_method(dsp64, gensym("dsp_add64"), x, sapf_perform64, 0, NULL);
 }
 
