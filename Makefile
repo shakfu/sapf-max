@@ -6,18 +6,21 @@ MAX_VERSIONS := 8 9
 
 
 
-.phony: all build clean setup update-submodules link
+.phony: all build clean reset setup update-submodules link
 
 all: build
 
 
-build: clean
+build:
 	@mkdir -p build && cd build && \
 		cmake .. && \
 		cmake --build . --config Release
 
 clean:
-	@rm -rf externals/* build
+	@rm -rf externals/*
+
+reset: clean
+	@rm -rf build
 
 setup: update-submodules link
 	$(call section,"setup complete")
