@@ -18,8 +18,13 @@ endif()
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
 add_subdirectory(libmanta)
 
+# --------------------------------------------------------------------------------
+# The library libsapf
 
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
@@ -57,24 +62,15 @@ set(OBJC_SOURCES
 	${SOURCE_DIR}/makeImage.mm
 )
 
-
-add_library( 
-	${PROJECT_NAME} 
-	MODULE
+add_library(
+	sapf
+	STATIC
 	${CPP_SOURCES}
 	${OBJC_SOURCES}
-	sapf_tilde.cpp
-)
-
-
-target_include_directories(
-	${PROJECT_NAME}
-	PUBLIC
-	${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_compile_options(
-	${PROJECT_NAME}
+	sapf
 	PUBLIC
 	-Wmissing-field-initializers
 	-Wmissing-prototypes
@@ -92,7 +88,7 @@ target_compile_options(
 )
 
 target_link_libraries(
-	${PROJECT_NAME} 
+	sapf
 	PUBLIC
 	manta
 	-ledit
@@ -104,6 +100,60 @@ target_link_libraries(
 	"-framework CoreFoundation"
 	"-framework CoreMidi"
 	"-framework CoreServices"
+)
+
+target_include_directories(
+	sapf
+	PUBLIC
+	${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+# --------------------------------------------------------------------------------
+# The executable sapf_exe
+
+add_executable(sapf_exe
+	${SOURCE_DIR}/main.cpp
+)
+
+target_include_directories(
+	sapf_exe
+	PUBLIC
+	${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(
+	sapf_exe
+	PUBLIC
+	sapf
+)
+
+set_target_properties(sapf_exe PROPERTIES OUTPUT_NAME "sapf")
+
+# --------------------------------------------------------------------------------
+# The external sapf_tilde
+
+add_library( 
+	${PROJECT_NAME} 
+	MODULE
+	sapf_tilde.cpp
+)
+
+target_include_directories(
+	${PROJECT_NAME}
+	PUBLIC
+	${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_compile_definitions(
+	${PROJECT_NAME}
+	PUBLIC
+	SAPF_TILDE
+)
+
+target_link_libraries(
+	${PROJECT_NAME}
+	PUBLIC
+	sapf
 )
 
 

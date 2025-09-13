@@ -22,13 +22,14 @@
 #include <algorithm>
 #include <cstdarg>
 
-// DISABLED: because it conflicts with Max's post()
-// void post(const char* fmt, ...)
-// {
-//     va_list vargs;
-//     va_start(vargs, fmt);
-//     vprintf(fmt, vargs);
-// }
+#ifndef SAPF_TILDE
+void post(const char* fmt, ...)
+{
+    va_list vargs;
+    va_start(vargs, fmt);
+    vprintf(fmt, vargs);
+}
+#endif
 
 void zprintf(std::string& out, const char* fmt, ...)
 {

@@ -17,7 +17,7 @@ build: clean
 		cmake --build . --config Release
 
 clean:
-	@rm -rf exterals build
+	@rm -rf externals/* build
 
 setup: update-submodules link
 	$(call section,"setup complete")

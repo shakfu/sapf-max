@@ -32,9 +32,12 @@
 #include "RCObj.hpp"
 #include <os/lock.h>
 
+#ifdef SAPF_TILDE
 #include "ext.h"
+#else
+void post(const char* fmt, ...);
+#endif
 
-// void post(const char* fmt, ...);
 
 #define COLLECT_MINFO 1
 
