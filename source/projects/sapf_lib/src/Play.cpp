@@ -28,7 +28,6 @@ const int kMaxChannels = 32;
 struct AUPlayer* gAllPlayers = nullptr;
 
 
-
 struct AUPlayer
 {
 	AUPlayer(Thread& inThread, int inNumChannels, ExtAudioFileRef inXAFRef = nullptr)
@@ -67,6 +66,9 @@ struct AUPlayer
 
 static void stopPlayer(AUPlayer* player)
 {
+#ifdef SAPF_TILDE
+	error("DEBUG: stopPlayer called (AudioUnit route - should NOT happen in Max)\n");
+#endif
 	AudioComponentInstance outputUnit = player->outputUnit;
 	player->outputUnit = nullptr;
 	if (outputUnit) {
@@ -82,6 +84,9 @@ static void stopPlayer(AUPlayer* player)
 
 void stopPlaying()
 {
+#ifdef SAPF_TILDE
+	sapf_debug("stopPlaying");
+#endif
 	Locker lock(&gPlayerMutex);
 
 	AUPlayer* player = gAllPlayers;
@@ -94,6 +99,9 @@ void stopPlaying()
 
 void stopPlayingIfDone()
 {
+// #ifdef SAPF_TILDE
+// 	sapf_debug("stopPlayingIfDone");
+// #endif
 	Locker lock(&gPlayerMutex);
 	
 	AUPlayer* player = gAllPlayers;
@@ -107,6 +115,9 @@ void stopPlayingIfDone()
 
 static void* stopDonePlayers(void* x)
 {
+#ifdef SAPF_TILDE
+	sapf_debug("stopDonePlayers");
+#endif
 	while(1) {
 		sleep(1);
 		stopPlayingIfDone();
@@ -119,6 +130,9 @@ pthread_t watchdog;
 
 static bool fillBufferList(AUPlayer* player, int inNumberFrames, AudioBufferList* ioData)
 {
+// #ifdef SAPF_TILDE
+// 	sapf_debug("fillBufferList");
+// #endif
 	if (player->done) {
 zeroAll:
 		for (int i = 0; i < (int)ioData->mNumberBuffers; ++i) {
@@ -196,6 +210,9 @@ static OSStatus inputCallback(	void *							inRefCon,
 
 static AudioComponentInstance openAU(UInt32 inType, UInt32 inSubtype, UInt32 inManuf)
 {
+#ifdef SAPF_TILDE
+	sapf_debug("AudioComponentInstance");
+#endif
     AudioComponentDescription desc;
     desc.componentType = inType;
     desc.componentSubType = inSubtype;
@@ -216,6 +233,10 @@ static AudioComponentInstance openAU(UInt32 inType, UInt32 inSubtype, UInt32 inM
 
 static OSStatus createGraph(AUPlayer* player)
 {
+#ifdef SAPF_TILDE
+	sapf_debug("createGraph");
+#endif
+
     OSStatus err = noErr;
 	AudioComponentInstance outputUnit = openAU('auou', 'def ', 'appl');
 	if (!outputUnit) {
@@ -264,6 +285,10 @@ static OSStatus createGraph(AUPlayer* player)
 
 void playWithAudioUnit(Thread& th, V& v)
 {
+#ifdef SAPF_TILDE
+	sapf_debug("playWithAudioUnit");
+#endif
+
 	if (!v.isList()) wrongType("play : s", "List", v);
 
 	Locker lock(&gPlayerMutex);

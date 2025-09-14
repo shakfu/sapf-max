@@ -30,6 +30,10 @@
 #include <histedit.h>
 #endif
 
+#ifdef SAPF_TILDE
+#include "sapf_debug.h"
+#endif
+
 extern pthread_mutex_t gHelpMutex;
 
 class Unlocker

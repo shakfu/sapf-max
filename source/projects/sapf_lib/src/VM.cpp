@@ -44,6 +44,9 @@ Thread::Thread()
     fromString(false),
     line(NULL)
 {
+#ifdef SAPF_TILDE
+	sapf_debug("Thread::Thread()");
+#endif
 	rgen.init(timeseed());
 }
 
@@ -54,6 +57,9 @@ Thread::Thread(const Thread& inParent)
     fromString(false),
     line(NULL)
 {
+#ifdef SAPF_TILDE
+	sapf_debug("Thread::Thread(const Thread& inParent)");
+#endif
 	rgen.init(timeseed());
 }
 
@@ -65,6 +71,9 @@ Thread::Thread(const Thread& inParent, P<Fun> const& inFun)
     fromString(false),
     line(NULL)
 {
+#ifdef SAPF_TILDE
+	sapf_debug("Thread::Thread(const Thread& inParent, P<Fun> const& inFun)");
+#endif
 	rgen.init(timeseed());
 }
 
@@ -662,6 +671,9 @@ void Thread::tuck(size_t n, Arg v)
 
 bool Thread::compile(const char* inString, P<Fun>& compiledFun, bool inTopLevel)
 {	
+#ifdef SAPF_TILDE
+	sapf_debug("Thread::compile()");
+#endif
 	Thread& th = *this;
 	SaveCompileScope scs(th);
 	if (inTopLevel) {

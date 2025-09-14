@@ -1,6 +1,7 @@
 #include "ErrorCodes.hpp"
 #include "Manta.h"
 #include "VM.hpp"
+#include "Play.hpp"
 #include "primes.hpp"
 #include <CoreFoundation/CoreFoundation.h>
 #include <algorithm>
@@ -78,6 +79,10 @@ typedef struct _sapf {
     double currentSampleRate; // Current sample rate from Max
     bool sampleRateChanged;   // Flag to trigger VM reconfiguration
 
+    // Intermediate audio buffers (like ChucK example)
+    float* out_sapf_buffer;     // Intermediate sapf output buffer
+    long bufferSize;           // Current buffer size (for reallocation detection)
+
     // non-audio outlet
     void * text_outlet;
 } t_sapf;
@@ -96,12 +101,21 @@ void sapf_help(t_sapf* x);
 void sapf_stack(t_sapf* x);
 void sapf_clear(t_sapf* x);
 
+// Max-specific audio functions
+void playWithMaxAudio(Thread& th, V& v);
+void addMaxSpecificOps();
+void outputStackToTextOutlet(t_sapf* x);
+void sapf_fill(t_sapf* x, long numFrames, float* outBuffer);
+
 // possibly useful funcs
 void initSapfBuiltins();
 void reportSapfError(t_sapf* x, const char* codeBuffer, const std::exception& e);
 
 // global class pointer variable
 static t_class* sapf_class = NULL;
+
+// Global reference to current sapf object for Max audio integration
+static t_sapf* gCurrentSapfObject = nullptr;
 
 // Flag to track if sapf builtins have been initialized globally
 static bool gSapfBuiltinsInitialized = false;
@@ -123,6 +137,9 @@ void initSapfBuiltins()
         AddMidiOps();
         AddSetOps();
 
+        // Add Max-specific overrides after standard functions
+        addMaxSpecificOps();
+
         gSapfBuiltinsInitialized = true;
         post("sapf~: Built-in functions initialized successfully");
 
@@ -130,6 +147,329 @@ void initSapfBuiltins()
         error("sapf~: Error initializing built-ins: %s", e.what());
     } catch (...) {
         error("sapf~: Unknown error initializing built-ins");
+    }
+}
+
+// Max-specific implementation of play that captures audio generator (not plays audio)
+void playWithMaxAudio(Thread& th, V& v)
+{
+    if (!gCurrentSapfObject) {
+        post("sapf~: Error - No Max object available for audio capture");
+        return;
+    }
+
+    // CRITICAL: Stop any AudioUnit playback first to prevent conflicts
+    stopPlaying();
+    post("sapf~: AudioUnit playback stopped");
+
+    post("sapf~: play command intercepted - capturing audio generator for Max audio system");
+
+    try {
+        // Clear any existing audio state
+        gCurrentSapfObject->hasValidAudio = 0;
+        gCurrentSapfObject->numAudioChannels = 0;
+
+        // Determine the type of audio generator we have
+        const char* resultType = "Unknown";
+        if (v.isReal()) {
+            resultType = "Real";
+        } else if (v.isObject()) {
+            Object* objPtr = v.o();
+            if (objPtr != nullptr) {
+                const char* typeName = objPtr->TypeName();
+                if (typeName != nullptr) {
+                    resultType = typeName;
+                } else {
+                    resultType = "CorruptedObject";
+                }
+            } else {
+                resultType = "NullObject";
+            }
+        } else {
+            resultType = "Other";
+        }
+
+        post("sapf~: play - Capturing audio generator, type: %s", resultType);
+
+        // The key insight: Instead of calling the sapf audio system (which uses AudioUnit),
+        // we capture the audio generator and let Max's sapf_perform64 generate audio directly
+        bool audioGeneratorCaptured = false;
+
+        // Check for audio-compatible generators (ZIn-compatible data)
+        if (v.isZIn() || (v.isObject() && v.o() &&
+                         (strcmp(resultType, "ZList") == 0 || strcmp(resultType, "VList") == 0))) {
+
+            // Single channel audio generator
+            gCurrentSapfObject->audioExtractor.set(v);
+            gCurrentSapfObject->numAudioChannels = 1;
+            gCurrentSapfObject->hasValidAudio = 1;
+            audioGeneratorCaptured = true;
+
+            post("sapf~: ✓ Single-channel audio generator captured (type: %s)", resultType);
+
+        } else if (v.isList()) {
+            // Handle list data - could be multi-channel generators
+            P<List> resultList = (List*)v.o();
+            if (resultList) {
+                if (resultList->isFinite()) {
+                    Array* channels = resultList->mArray.get();
+                    if (channels != nullptr && channels->size() > 1) {
+                        // Multi-channel audio generators
+                        int numChannels = std::min((int)channels->size(), 8);
+                        bool allChannelsValid = true;
+
+                        // Validate all channels are audio generators
+                        for (int i = 0; i < numChannels && allChannelsValid; i++) {
+                            V channelData = channels->at(i);
+                            if (!channelData.isZIn() && !(channelData.isObject() && channelData.o())) {
+                                allChannelsValid = false;
+                            }
+                        }
+
+                        if (allChannelsValid) {
+                            // Set up multi-channel audio generators
+                            for (int i = 0; i < numChannels; i++) {
+                                V channelData = channels->at(i);
+                                gCurrentSapfObject->audioExtractors[i].set(channelData);
+                            }
+                            gCurrentSapfObject->numAudioChannels = numChannels;
+                            gCurrentSapfObject->hasValidAudio = 1;
+                            audioGeneratorCaptured = true;
+
+                            post("sapf~: ✓ %d-channel audio generators captured", numChannels);
+                        } else {
+                            // Mixed data - fall back to single channel
+                            gCurrentSapfObject->audioExtractor.set(v);
+                            gCurrentSapfObject->numAudioChannels = 1;
+                            gCurrentSapfObject->hasValidAudio = 1;
+                            audioGeneratorCaptured = true;
+
+                            post("sapf~: ✓ Mixed list data - captured as single-channel generator");
+                        }
+                    } else {
+                        // Single item list or empty list
+                        gCurrentSapfObject->audioExtractor.set(v);
+                        gCurrentSapfObject->numAudioChannels = 1;
+                        gCurrentSapfObject->hasValidAudio = 1;
+                        audioGeneratorCaptured = true;
+
+                        post("sapf~: ✓ Single-item list captured as audio generator");
+                    }
+                } else {
+                    // Infinite list - treat as single channel generator
+                    gCurrentSapfObject->audioExtractor.set(v);
+                    gCurrentSapfObject->numAudioChannels = 1;
+                    gCurrentSapfObject->hasValidAudio = 1;
+                    audioGeneratorCaptured = true;
+
+                    post("sapf~: ✓ Infinite list captured as single-channel generator");
+                }
+            }
+        }
+
+        if (!audioGeneratorCaptured) {
+            post("sapf~: Warning - 'play' called with non-audio generator (type: %s)", resultType);
+            post("sapf~: Audio output will be silent");
+        } else {
+            // Increment audio state version to signal new audio generators
+            ATOMIC_INCREMENT(&gCurrentSapfObject->audioStateVersion);
+            post("sapf~: Audio generator successfully captured - Max will generate audio in sapf_perform64");
+        }
+
+    } catch (const std::exception& e) {
+        post("sapf~: Error capturing audio generator: %s", e.what());
+        if (gCurrentSapfObject) {
+            gCurrentSapfObject->hasValidAudio = 0;
+            gCurrentSapfObject->numAudioChannels = 0;
+        }
+    }
+}
+
+// Max-specific play primitive that uses Max audio instead of AudioUnit
+static void playMax_(Thread& th, Prim* prim)
+{
+    post("sapf~: DEBUG - playMax_ called (Max audio route)");
+    V v = th.popList("play : list");
+    playWithMaxAudio(th, v);
+}
+
+// Add Max-specific primitives that override standard ones
+void addMaxSpecificOps()
+{
+    post("sapf~: Adding Max-specific primitives (overriding 'play')");
+
+    try {
+        // Override the 'play' primitive to use Max audio instead of AudioUnit
+        // This must be called after AddStreamOps() to override the standard play
+        vm.def("play", 1, 0, playMax_, "(channels -->) plays the audio to Max outputs.");
+
+        post("sapf~: ✓ Max-specific 'play' primitive installed");
+
+    } catch (const std::exception& e) {
+        error("sapf~: Error adding Max-specific primitives: %s", e.what());
+    } catch (...) {
+        error("sapf~: Unknown error adding Max-specific primitives");
+    }
+}
+
+// Output current stack contents to Max text outlet (like sapf REPL)
+void outputStackToTextOutlet(t_sapf* x)
+{
+    if (!x || !x->sapfThread || !x->text_outlet) {
+        return;
+    }
+
+    try {
+        size_t stackDepth = x->sapfThread->stackDepth();
+
+        if (stackDepth == 0) {
+            // Output empty stack indicator (like REPL prompt)
+            t_atom emptyAtom;
+            atom_setsym(&emptyAtom, gensym("stack_empty"));
+            outlet_anything(x->text_outlet, gensym("stack"), 1, &emptyAtom);
+        } else {
+            // Output each stack item
+            for (size_t i = 0; i < stackDepth; i++) {
+                try {
+                    // Get stack item (from bottom to top to match REPL order)
+                    V stackItem = x->sapfThread->stack[x->sapfThread->stackBase + i];
+
+                    // Convert sapf value to Max-compatible output
+                    if (stackItem.isReal()) {
+                        t_atom valueAtom;
+                        atom_setfloat(&valueAtom, (float)stackItem.asFloat());
+                        outlet_anything(x->text_outlet, gensym("value"), 1, &valueAtom);
+
+                    } else if (stackItem.isList()) {
+                        // For lists, output a formatted representation
+                        P<List> list = (List*)stackItem.o();
+                        if (list && list->isFinite()) {
+                            Array* arr = list->mArray.get();
+                            if (arr && arr->size() <= 10) { // Limit output size
+                                t_atom listAtoms[10];
+                                int atomCount = 0;
+
+                                for (size_t j = 0; j < (size_t)arr->size() && atomCount < 10; j++) {
+                                    V item = arr->at(j);
+                                    if (item.isReal()) {
+                                        atom_setfloat(&listAtoms[atomCount], (float)item.asFloat());
+                                        atomCount++;
+                                    }
+                                }
+
+                                if (atomCount > 0) {
+                                    outlet_anything(x->text_outlet, gensym("list"), atomCount, listAtoms);
+                                } else {
+                                    t_atom listSymbol;
+                                    atom_setsym(&listSymbol, gensym("[complex_list]"));
+                                    outlet_anything(x->text_outlet, gensym("value"), 1, &listSymbol);
+                                }
+                            } else {
+                                t_atom listSymbol;
+                                atom_setsym(&listSymbol, gensym("[large_list]"));
+                                outlet_anything(x->text_outlet, gensym("value"), 1, &listSymbol);
+                            }
+                        } else {
+                            t_atom listSymbol;
+                            atom_setsym(&listSymbol, gensym("[infinite_list]"));
+                            outlet_anything(x->text_outlet, gensym("value"), 1, &listSymbol);
+                        }
+
+                    } else if (stackItem.isObject()) {
+                        // For other objects, output their type
+                        Object* obj = stackItem.o();
+                        if (obj) {
+                            const char* typeName = obj->TypeName();
+                            if (typeName) {
+                                t_atom typeAtom;
+                                atom_setsym(&typeAtom, gensym(typeName));
+                                outlet_anything(x->text_outlet, gensym("object"), 1, &typeAtom);
+                            } else {
+                                t_atom unknownAtom;
+                                atom_setsym(&unknownAtom, gensym("[unknown_object]"));
+                                outlet_anything(x->text_outlet, gensym("value"), 1, &unknownAtom);
+                            }
+                        }
+                    }
+
+                } catch (const std::exception& e) {
+                    post("sapf~: Error outputting stack item %zu: %s", i, e.what());
+                    t_atom errorAtom;
+                    atom_setsym(&errorAtom, gensym("[error]"));
+                    outlet_anything(x->text_outlet, gensym("value"), 1, &errorAtom);
+                }
+            }
+        }
+
+    } catch (const std::exception& e) {
+        post("sapf~: Error outputting stack contents: %s", e.what());
+    }
+}
+
+// Fill audio buffer using sapf audio generators (like chuck->run())
+void sapf_fill(t_sapf* x, long numFrames, float* outBuffer)
+{
+    if (!x || !outBuffer || numFrames <= 0) {
+        return;
+    }
+
+    // Initialize buffer with silence
+    memset(outBuffer, 0.f, sizeof(float) * numFrames);
+
+    // Only generate audio if we have valid audio generators
+    if (!x->hasValidAudio || !x->audioThread) {
+        return; // Buffer remains silent
+    }
+
+    try {
+        int localChannels = x->numAudioChannels;
+
+        if (localChannels >= 1) {
+            if (localChannels == 1) {
+                // Single channel audio generation
+                int frameCount = (int)numFrames;
+
+                // Use ZIn::fill to generate audio directly into our buffer
+                // This is the key - we use our own buffer instead of AudioUnit
+                bool isDone = x->audioExtractor.fill(*x->audioThread, frameCount, outBuffer, 1);
+
+                if (frameCount != (int)numFrames) {
+                    // Fill remaining frames with silence if generator produced fewer frames
+                    for (long i = frameCount; i < numFrames; i++) {
+                        outBuffer[i] = 0.0f;
+                    }
+                }
+
+                // If generator is done, mark audio as invalid
+                if (isDone) {
+                    x->hasValidAudio = 0;
+                    post("sapf~: Audio generator completed");
+                }
+
+            } else {
+                // Multi-channel: for now, just use first channel
+                // TODO: Implement proper multi-channel support with separate buffers
+                int frameCount = (int)numFrames;
+                bool isDone = x->audioExtractors[0].fill(*x->audioThread, frameCount, outBuffer, 1);
+
+                if (frameCount != (int)numFrames) {
+                    for (long i = frameCount; i < numFrames; i++) {
+                        outBuffer[i] = 0.0f;
+                    }
+                }
+
+                if (isDone) {
+                    x->hasValidAudio = 0;
+                    post("sapf~: Multi-channel audio generator completed");
+                }
+            }
+        }
+
+    } catch (const std::exception& e) {
+        post("sapf~: Error generating audio: %s", e.what());
+        // Fill buffer with silence on error
+        memset(outBuffer, 0.f, sizeof(float) * numFrames);
+        x->hasValidAudio = 0;
     }
 }
 
@@ -322,6 +662,13 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
                                                 // sets it
             x->sampleRateChanged = true;        // Force initial configuration
 
+            // Initialize intermediate audio buffers
+            x->out_sapf_buffer = nullptr;
+            x->bufferSize = 0;
+
+            // Set global reference for Max audio integration
+            gCurrentSapfObject = x;
+
             post("sapf~: Initialized with sapf language interpreter");
 
         } catch (const std::exception& e) {
@@ -357,6 +704,11 @@ void sapf_free(t_sapf* x)
 
     post("sapf~: Cleaning up sapf VM resources");
 
+    // Clear global reference if this object was the current one
+    if (gCurrentSapfObject == x) {
+        gCurrentSapfObject = nullptr;
+    }
+
     // Clean up main sapf Thread (manually allocated)
     if (x->sapfThread) {
         try {
@@ -383,6 +735,12 @@ void sapf_free(t_sapf* x)
         x->lastSapfCode = nullptr;
     }
 
+    // Clean up intermediate audio buffers
+    if (x->out_sapf_buffer) {
+        delete[] x->out_sapf_buffer;
+        x->out_sapf_buffer = nullptr;
+    }
+
     // Smart pointers (P<Fun>) clean up automatically via destructor
     // ZIn objects clean up automatically via destructor
     // Primitive types (bool, double, char[]) clean up automatically
@@ -396,6 +754,9 @@ void sapf_free(t_sapf* x)
 void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
 {
     post("sapf~: DEBUG - sapf_code entry, argc=%ld", argc);
+
+    // Set global object reference for Max audio integration
+    gCurrentSapfObject = x;
 
     // Phase 1: Input validation and code string construction
     ValidationResult validation = sapf_validateInput(x, s, argc, argv);
@@ -433,16 +794,15 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
             if (!execution.errorMessage.empty()) {
                 error("sapf~: ✗ %s", execution.errorMessage.c_str());
             }
-        } else if (execution.stackDepth > 0) {
-            // Phase 4: Audio result processing and type checking
-            AudioProcessingResult audioProcessing = sapf_processAudioResult(x, execution.audioResult);
-            if (!audioProcessing.success && !audioProcessing.errorMessage.empty()) {
-                error("sapf~: ✗ %s", audioProcessing.errorMessage.c_str());
-            }
         }
+        // Note: Audio processing is now handled by the 'play' primitive itself
+        // We don't need to process stack results for audio here anymore
     }
 
-    // Phase 5: Final status reporting
+    // Phase 5: Output stack contents to text outlet (like sapf REPL)
+    outputStackToTextOutlet(x);
+
+    // Phase 6: Final status reporting
     sapf_reportStatus(x, x->compilationError, x->hasValidAudio, x->compiledFunction);
 }
 
@@ -604,155 +964,80 @@ void sapf_dsp64(t_sapf* x, t_object* dsp64, short* count, double samplerate, lon
         post("sapf~: Sample rate unchanged (%.1f Hz)", samplerate);
     }
 
+    // Allocate intermediate audio buffers (like ChucK example)
+    post("sapf~: Allocating audio buffers: %ld frames", maxvectorsize);
+
+    // Clean up old buffers if they exist
+    if (x->out_sapf_buffer) {
+        delete[] x->out_sapf_buffer;
+        x->out_sapf_buffer = nullptr;
+    }
+
+    // Allocate new buffers with current vector size
+    // For now, supporting single channel - can expand to multichannel later
+    x->out_sapf_buffer = new float[maxvectorsize];
+    x->bufferSize = maxvectorsize;
+
+    // Initialize buffer with silence
+    memset(x->out_sapf_buffer, 0.f, sizeof(float) * maxvectorsize);
+
+    post("sapf~: ✓ Audio buffers allocated (%ld samples)", maxvectorsize);
+
     object_method(dsp64, gensym("dsp_add64"), x, sapf_perform64, 0, NULL);
 }
 
-// this is the 64-bit perform method audio vectors
+// this is the 64-bit perform method audio vectors (buffer-based like ChucK)
 void sapf_perform64(t_sapf* x, t_object* dsp64, double** ins, long numins, double** outs, long numouts,
                     long sampleframes, long flags, void* userparam)
 {
-    long n = sampleframes;
+    t_double* outL = outs[0];
+    float* out_ptr = x->out_sapf_buffer;
+    long n = sampleframes; // n = 64
 
-    // Lock-free approach: check atomic flag for valid audio
-    if (x && x->hasValidAudio && x->audioThread) {
-
-        // Debug: First few calls only
-        static int debugCallCount = 0;
-        if (debugCallCount < 3) {
-            post("sapf~: DEBUG - Audio callback: hasValidAudio=%s, frames=%ld", x->hasValidAudio ? "true" : "false", n);
-            debugCallCount++;
-        }
-
-        try {
-            // Lock-free access to audio state using atomic reads
-            int localChannels = x->numAudioChannels; // Atomic read
-
-            if (localChannels >= 1) {
-                // Generate audio using sapf's ZIn::fill method
-                std::vector<float> tempBuffer(n);
-                int frameCount = (int)n;
-                int originalFrameCount = frameCount;
-
-                if (debugCallCount <= 3) {
-                    post("sapf~: DEBUG - Before fill: frameCount=%d, "
-                         "bufferSize=%ld",
-                         frameCount, n);
-                }
-
-                bool isDone = x->audioExtractor.fill(*x->audioThread, frameCount, tempBuffer.data(), 1);
-
-                if (debugCallCount <= 3) {
-                    post("sapf~: DEBUG - After fill: isDone=%s, frameCount=%d "
-                         "(was %d)",
-                         isDone ? "true" : "false", frameCount, originalFrameCount);
-
-                    // Check if we got any non-zero samples
-                    bool hasNonZeroSamples = false;
-                    for (int i = 0; i < std::min(frameCount, 8); i++) { // Check first 8 samples
-                        if (tempBuffer[i] != 0.0f) {
-                            hasNonZeroSamples = true;
-                            break;
-                        }
-                    }
-                    post("sapf~: DEBUG - Buffer has non-zero samples: %s", hasNonZeroSamples ? "true" : "false");
-                    if (hasNonZeroSamples) {
-                        post("sapf~: DEBUG - Sample values: [0]=%.6f [1]=%.6f "
-                             "[2]=%.6f",
-                             tempBuffer[0], tempBuffer[1], tempBuffer[2]);
-                    }
-                }
-
-                // ZIn::fill() returns false for ongoing audio, true when
-                // stream ends So we have audio available when frameCount > 0
-                // (regardless of isDone return value)
-                if (frameCount > 0) {
-                    // Copy generated audio to all Max output channels
-                    for (long chan = 0; chan < numouts; chan++) {
-                        for (long i = 0; i < std::min((long)frameCount, n); i++) {
-                            outs[chan][i] = (double)tempBuffer[i];
-                        }
-                        // Fill remaining samples with silence if needed
-                        for (long i = frameCount; i < n; i++) {
-                            outs[chan][i] = 0.0;
-                        }
-                    }
-
-                    if (debugCallCount <= 3) {
-                        post("sapf~: DEBUG - Successfully generated %d frames "
-                             "of audio",
-                             frameCount);
-                    }
-
-                    // If the generator indicates it's done (isDone=true), mark
-                    // as invalid for future calls
-                    if (isDone) {
-                        x->hasValidAudio = 0; // Stream ended, mark as invalid
-                        if (debugCallCount <= 3) {
-                            post("sapf~: DEBUG - Stream ended, marking audio "
-                                 "as invalid");
-                        }
-                    }
-                } else {
-                    // No audio frames generated - fill with silence and mark
-                    // invalid
-                    for (long chan = 0; chan < numouts; chan++) {
-                        for (long i = 0; i < n; i++) {
-                            outs[chan][i] = 0.0;
-                        }
-                    }
-
-                    x->hasValidAudio = 0; // Atomically mark as invalid
-
-                    if (debugCallCount <= 3) {
-                        post("sapf~: DEBUG - No audio frames generated: "
-                             "frameCount=%d",
-                             frameCount);
-                    }
-                }
-            } else {
-                // No channels configured - silence
-                for (long chan = 0; chan < numouts; chan++) {
-                    for (long i = 0; i < n; i++) {
-                        outs[chan][i] = 0.0;
-                    }
-                }
-            }
-
-        } catch (const std::exception& e) {
-            // Exception in audio processing - output silence
-
-            for (long chan = 0; chan < numouts; chan++) {
-                for (long i = 0; i < n; i++) {
-                    outs[chan][i] = 0.0;
-                }
-            }
-            post("sapf~: Audio exception: %s", e.what());
-        }
-
-    } else {
-        // No valid audio - use pass-through or silence
-        static int noAudioCallCount = 0;
-        if (noAudioCallCount < 3) {
-            post("sapf~: DEBUG - No valid audio: hasValidAudio=%s, "
-                 "audioThread=%s",
-                 x && x->hasValidAudio ? "true" : "false", x && x->audioThread ? "valid" : "null");
-            noAudioCallCount++;
-        }
-
+    if (!x || !x->out_sapf_buffer) {
+        // No buffer allocated - output silence
         for (long chan = 0; chan < numouts; chan++) {
-            if (chan == 0 && numins > 0 && ins) {
-                // Pass-through first input to first output (legacy)
-                for (long i = 0; i < n; i++) {
-                    outs[chan][i] = ins[0][i] + (x ? x->offset : 0.0);
-                }
-            } else {
-                // Silence for other channels
-                for (long i = 0; i < n; i++) {
-                    outs[chan][i] = 0.0;
-                }
+            for (long i = 0; i < n; i++) {
+                outs[chan][i] = 0.0;
             }
         }
+        return;
     }
+
+    // Step 1: Generate audio using sapf (like chuck->run())
+    sapf_fill(x, n, out_ptr);
+
+
+    // Debug output (first few calls only)
+    static int debugCallCount = 0;
+    if (debugCallCount < 3) {
+        bool hasNonZero = false;
+        for (long i = 0; i < std::min(n, 8L); i++) {
+            if (x->out_sapf_buffer[i] != 0.0f) {
+                hasNonZero = true;
+                break;
+            }
+        }
+        post("sapf~: Audio callback: %ld frames, hasValidAudio=%s, buffer has audio=%s",
+             n, x->hasValidAudio ? "true" : "false", hasNonZero ? "true" : "false");
+        if (hasNonZero) {
+            post("sapf~: Sample values: [0]=%.6f [1]=%.6f [2]=%.6f",
+                 x->out_sapf_buffer[0], x->out_sapf_buffer[1], x->out_sapf_buffer[2]);
+        }
+        debugCallCount++;
+    }
+
+    // Step 2: Copy from our intermediate buffer to Max outputs (like ChucK)
+    while (n--) {
+        *outL++ = (double)(*out_ptr++);
+    }
+
+    // for (long i = 0; i < n; i++) {
+    //     for (long chan = 0; chan < numouts; chan++) {
+    //         outs[chan][i] = (double)(*out_ptr++);
+    //     }
+    //     // out_ptr++; // Move to next sample
+    // }
 }
 
 void sapf_help(t_sapf* x)
@@ -949,32 +1234,10 @@ ValidationResult sapf_validateInput(t_sapf* x, t_symbol* s, long argc, t_atom* a
         return result;
     }
 
-    // Check for 'play' command and handle it specially for Max integration
+    // Note: 'play' command is now handled by the sapf interpreter itself
+    // via our custom playMax_ primitive that redirects to Max audio system
     if (strstr(codeBuffer, "play")) {
-        post("sapf~: ✓ 'play' command detected - will execute audio part and capture for Max output");
-
-        // Remove 'play' from the code string since we'll capture the audio data before it gets consumed
-        char* playPos = strstr(codeBuffer, " play");
-        if (playPos) {
-            *playPos = '\0'; // Truncate at 'play' command
-            post("sapf~: Executing audio generation part: %s", codeBuffer);
-        } else {
-            // Handle case where 'play' is at the beginning or standalone
-            playPos = strstr(codeBuffer, "play");
-            if (playPos == codeBuffer) {
-                result.errorMessage = "Code consists only of 'play' - no audio generation code to execute";
-                return result;
-            }
-        }
-
-        // Re-validate string length after play removal
-        if (strlen(codeBuffer) == 0) {
-            result.errorMessage = "No valid code remains after removing 'play' command";
-            return result;
-        }
-
-    } else {
-        post("sapf~: ⚠ No 'play' command - expression will leave result on stack");
+        post("sapf~: ✓ 'play' command detected - will be handled by Max-specific primitive");
     }
 
     result.success = true;
@@ -1139,11 +1402,10 @@ ExecutionResult sapf_executeCode(t_sapf* x, P<Fun> compiledFunction)
     result.stackDepth = 0;
 
     try {
-        // Clear stack before execution to ensure clean state
+        // Check stack depth before execution but don't clear it (preserve sapf stack-based model)
         size_t preStackDepth = x->sapfThread->stackDepth();
         if (preStackDepth > 0) {
-            post("sapf~: Clearing %zu items from stack before execution", preStackDepth);
-            x->sapfThread->clearStack();
+            post("sapf~: Executing with %zu items already on stack", preStackDepth);
         }
 
         // Execute the compiled function with additional safety checks
@@ -1208,35 +1470,14 @@ ExecutionResult sapf_executeCode(t_sapf* x, P<Fun> compiledFunction)
             post("sapf~: Consider sending 'clear' to reset stack");
         }
 
+        // Simply report execution success - don't process stack for audio
+        // Audio is now handled by the 'play' primitive directly
         if (postStackDepth > 0) {
-            try {
-                // Additional safety check before accessing stack
-                if (!x->sapfThread) {
-                    throw std::runtime_error("sapfThread became null when processing results");
-                }
-
-                // Get the top result from execution WITHOUT popping it (preserve stack for inspection)
-                V audioResult = x->sapfThread->top();
-
-                post("sapf~: Using top stack value for audio (stack preserved for inspection)");
-
-                // Check for multiple items on stack
-                if (postStackDepth > 1) {
-                    post("sapf~: ⚠ %zu items on stack - using top item, others preserved", postStackDepth);
-                    post("sapf~: Hint: Send 'stack' to inspect all values or 'clear' to empty");
-                }
-
-                result.success = true;
-                result.audioResult = audioResult;
-
-            } catch (const std::exception& e) {
-                result.errorMessage = "Error processing stack results: " + std::string(e.what());
-                post("sapf~: Continuing with no audio output due to stack processing error");
-            }
+            post("sapf~: ✓ Execution completed, %zu items on stack", postStackDepth);
+            result.success = true;
         } else {
-            result.errorMessage = "Code executed but produced no results on stack";
-            post("sapf~: ⚠ Code executed but produced no results on stack");
-            post("sapf~: Hint: Ensure your sapf code produces a value (e.g., '440 0 sinosc')");
+            post("sapf~: ✓ Execution completed, stack is empty");
+            result.success = true;
         }
 
     } catch (const std::exception& e) {
