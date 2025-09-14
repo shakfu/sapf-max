@@ -1,0 +1,505 @@
+
+1 = throwOnError
+
+[
+;; equals
+"1"
+"0 not"
+"1 1 equals"
+"'a 'a equals"
+"1 2 equals not"
+"'a 'b equals not"
+"1 'a equals not"
+"[][] equals"
+"[][1] equals not"
+"[1][] equals not"
+"[1][1] equals"
+"[1][2] equals not"
+"[[1] 2][[1] 2] equals"
+"[[1] 2][[1] 3] equals not"
+"[[1] 2][[3] 2] equals not"
+
+"#[1]#[1] equals"
+"#[1]#[2] equals not"
+"[#[1] 2][#[1] 2] equals"
+"[#[1] 2][#[1] 3] equals not"
+"[#[1] 2][#[3] 2] equals not"
+
+;; 2pl 3ple 4ple untuple tuple
+"1 2 2ple [1 2] equals"
+"1 2 3 3ple [1 2 3] equals"
+"1 2 3 4 4ple [1 2 3 4] equals"
+"[1 2 3][4 5 6] 2ples [[1 4] [2 5] [3 6]] equals"
+"[1 2 3][4 5 6][7 8 9] 3ples [[1 4 7] [2 5 8] [3 6 9]] equals"
+"[1 2 3][4 5 6][7 8 9][10 11 12] 4ples [[1 4 7 10] [2 5 8 11] [3 6 9 12]] equals"
+"[1 2 3] un3 3ples [1 2 3] equals"
+
+;; stack shufflers
+"clear stackDepth 0 equals"
+"1 2 3 clear stackDepth 0 equals"
+"1 2 3 cleard 3 equals"
+"1 2 3 cleard stackDepth 1 equals"
+"8 aa 2ple [8 8] equals"
+"1 2 ba 2ple [2 1] equals"
+"1 2 bab 3ple [2 1 2] equals"
+"1 2 aba 3ple [1 2 1] equals"
+"1 2 aab 3ple [1 1 2] equals"
+"1 2 aabb 4ple [1 1 2 2] equals"
+"1 2 abab 4ple [1 2 1 2] equals"
+"1 2 3 bac 3ple [2 1 3] equals"
+"1 2 3 cba 3ple [3 2 1] equals"
+"1 2 3 bca 3ple [2 3 1] equals"
+"1 2 3 cab 3ple [3 1 2] equals"
+"1 2 3 nip 2ple [1 3] equals"
+"1 2 3 pop 2ple [1 2] equals"
+
+;; size reverse
+"123 size 1 equals"
+"[] size 0 equals"
+"[1] size 1 equals"
+"[1 2] size 2 equals"
+"[] reverse [] equals"
+"[1] reverse [1] equals"
+"[1 2] reverse [2 1] equals"
+"[1 2 3] reverse [3 2 1] equals"
+
+"#[] size 0 equals"
+"#[1] size 1 equals"
+"#[1 2] size 2 equals"
+"#[] reverse #[] equals"
+"#[1] reverse #[1] equals"
+"#[1 2] reverse #[2 1] equals"
+"#[1 2 3] reverse #[3 2 1] equals"
+
+"ord finite 0 equals"
+"1 10 to finite 1 equals"
+"ord 1 10 to + finite 1 equals"
+
+
+;; conditionals
+"1  \['a]\['b] if 'a equals"
+"0  \['a]\['b] if 'b equals"
+"'x \['a]\['b] if 'a equals"
+
+;; refs
+"1 get 1 equals"
+"1 R get 1 equals"
+"1 R = r  2 r set  r get 2 equals"
+"1 ZR get 1 equals"
+"1 ZR = r  2 r set  r get 2 equals"
+
+;; apply
+"3 ! 3 equals"
+"\[3] ! 3 equals"
+"\[[1 2]] ! [1 2] equals"
+"7 4 \a b[a b -] ! 3 equals"
+
+"5/4 1.25 equals"
+
+"1 \a [a] ! 1 equals"
+"1 2 \a b [a] ! 1 equals"
+"1 2 \a b [b] ! 2 equals"
+"1 2 3 \a b c [a] ! 1 equals"
+"1 2 3 \a b c [b] ! 2 equals"
+"1 2 3 \a b c [c] ! 3 equals"
+
+;; math ops
+"1 2 + 3 equals"
+"2 3 * 6 equals"
+"[1 2] 10 * [10 20] equals"
+"[1 2] 10 ba * [10 20] equals"
+"[1 2] [10 20] ba + [11 22] equals"
+"[1 [2 [3]]] 10 * [10 [20 [30]]] equals"
+"[1 [2 [3]]] 10 ba * [10 [20 [30]]] equals"
+"[1 [2 [3]]] [10 20] * [10 [40 [60]]] equals"
+"[1 [2 [3]]] [10 20] ba * [10 [40 [60]]] equals"
+"[1 2] [3 4 5] * [3 8] equals"
+"[1 2 3 4] +/ 10 equals"
+"[1 2 3 4] */ 24 equals"
+"[1 2 3 4] +\ [1 3 6 10] equals"
+"[1 2 3 4] *\ [1 2 6 24] equals"
+"[1 2 3 4] +^ [1 3 5 7] equals"
+"[1 2 3 4] -^ [1 1 1 1] equals"
+"[1 2 3 [10 20]] +/ [16 26] equals"
+"[1 2 3 [10 20] 4] +\ [1 3 6 [16 26][20 30]] equals"
+
+"#[1 2] 10 * #[10 20] equals"
+" [1 2] #[10 20] ba + [#[11 21] #[12 22]] equals"
+"#[1 2]  [10 20] ba + [#[11 12] #[21 22]] equals"
+"#[1 2] #[10 20] ba + #[11 22] equals"
+
+;; array ops
+"[]  0 rot [] equals"
+"[]  1 rot [] equals"
+"[] -1 rot [] equals"
+"[1]  0 rot [1] equals"
+"[1]  1 rot [1] equals"
+"[1] -1 rot [1] equals"
+"[1 2 3 4]  0 rot [1 2 3 4] equals"
+"[1 2 3 4]  1 rot [4 1 2 3] equals"
+"[1 2 3 4] -1 rot [2 3 4 1] equals"
+"[1 2 3 4]  2 rot [3 4 1 2] equals"
+"[1 2 3 4]  3 rot [2 3 4 1] equals"
+
+"[]  0 shift [] equals"
+"[]  1 shift [] equals"
+"[] -1 shift [] equals"
+"[1]  0 shift [1] equals"
+"[1]  1 shift [0] equals"
+"[1] -1 shift [0] equals"
+"[1 2 3 4]  0 shift [1 2 3 4] equals"
+"[1 2 3 4] -1 shift [2 3 4 0] equals"
+"[1 2 3 4] -2 shift [3 4 0 0] equals"
+"[1 2 3 4] -3 shift [4 0 0 0] equals"
+"[1 2 3 4] -4 shift [0 0 0 0] equals"
+"[1 2 3 4] -5 shift [0 0 0 0] equals"
+"[1 2 3 4]  1 shift [0 1 2 3] equals"
+"[1 2 3 4]  2 shift [0 0 1 2] equals"
+"[1 2 3 4]  3 shift [0 0 0 1] equals"
+"[1 2 3 4]  4 shift [0 0 0 0] equals"
+"[1 2 3 4]  5 shift [0 0 0 0] equals"
+
+"[]  0 clipShift [] equals"
+"[]  1 clipShift [] equals"
+"[] -1 clipShift [] equals"
+"[1]  0 clipShift [1] equals"
+"[1]  1 clipShift [1] equals"
+"[1] -1 clipShift [1] equals"
+"[1 2 3 4]  0 clipShift [1 2 3 4] equals"
+"[1 2 3 4] -1 clipShift [2 3 4 4] equals"
+"[1 2 3 4] -2 clipShift [3 4 4 4] equals"
+"[1 2 3 4] -3 clipShift [4 4 4 4] equals"
+"[1 2 3 4] -4 clipShift [4 4 4 4] equals"
+"[1 2 3 4] -5 clipShift [4 4 4 4] equals"
+"[1 2 3 4]  1 clipShift [1 1 2 3] equals"
+"[1 2 3 4]  2 clipShift [1 1 1 2] equals"
+"[1 2 3 4]  3 clipShift [1 1 1 1] equals"
+"[1 2 3 4]  4 clipShift [1 1 1 1] equals"
+"[1 2 3 4]  5 clipShift [1 1 1 1] equals"
+
+"[]  0 foldShift [] equals"
+"[]  1 foldShift [] equals"
+"[] -1 foldShift [] equals"
+"[1]  0 foldShift [1] equals"
+"[1]  1 foldShift [1] equals"
+"[1] -1 foldShift [1] equals"
+"[1 2 3 4]  0 foldShift [1 2 3 4] equals"
+"[1 2 3 4] -1 foldShift [2 3 4 3] equals"
+"[1 2 3 4] -2 foldShift [3 4 3 2] equals"
+"[1 2 3 4] -3 foldShift [4 3 2 1] equals"
+"[1 2 3 4] -4 foldShift [3 2 1 2] equals"
+"[1 2 3 4] -5 foldShift [2 1 2 3] equals"
+"[1 2 3 4]  1 foldShift [2 1 2 3] equals"
+"[1 2 3 4]  2 foldShift [3 2 1 2] equals"
+"[1 2 3 4]  3 foldShift [4 3 2 1] equals"
+"[1 2 3 4]  4 foldShift [3 4 3 2] equals"
+"[1 2 3 4]  5 foldShift [2 3 4 3] equals"
+
+"[1 2 3 4 5]  3 N [1 2 3] equals"
+"[1 2 3]  5 N [1 2 3] equals"
+"#[1 2 3 4 5]  3 N #[1 2 3] equals"
+"#[1 2 3]  5 N #[1 2 3] equals"
+
+"[1 2 3 4 5]  0 skip [1 2 3 4 5] equals"
+"[1 2 3 4 5]  1 skip [2 3 4 5] equals"
+"[1 2 3 4 5]  3 skip [4 5] equals"
+"[1 2 3 4 5]  5 skip [] equals"
+"[1 2 3 4 5]  6 skip [] equals"
+
+"#[1 2 3 4 5]  0 skip #[1 2 3 4 5] equals"
+"#[1 2 3 4 5]  1 skip #[2 3 4 5] equals"
+"#[1 2 3 4 5]  3 skip #[4 5] equals"
+"#[1 2 3 4 5]  5 skip #[] equals"
+"#[1 2 3 4 5]  6 skip #[] equals"
+
+"ord 14 skip 3 N [15 16 17] equals"
+"ord 15 skip 3 N [16 17 18] equals"
+"ord 16 skip 3 N [17 18 19] equals"
+"ord 17 skip 3 N [18 19 20] equals"
+
+"[1 2 3 4 5]  3 take [1 2 3] equals"
+"[1 2 3 4 5] -3 take [3 4 5] equals"
+"[1 2 3]  5 take [1 2 3 0 0] equals"
+"[1 2 3] -5 take [0 0 1 2 3] equals"
+"[]  3 take [0 0 0] equals"
+"[] -3 take [0 0 0] equals"
+
+"[1 2 3 4 5]  0 drop [1 2 3 4 5] equals"
+"[1 2 3 4 5]  1 drop [2 3 4 5] equals"
+"[1 2 3 4 5]  3 drop [4 5] equals"
+"[1 2 3 4 5]  5 drop [] equals"
+"[1 2 3 4 5]  6 drop [] equals"
+"[1 2 3 4 5] -1 drop [1 2 3 4] equals"
+"[1 2 3 4 5] -2 drop [1 2 3] equals"
+"[1 2 3 4 5] -3 drop [1 2] equals"
+"[1 2 3 4 5] -4 drop [1] equals"
+"[1 2 3 4 5] -5 drop [] equals"
+"[1 2 3 4 5] -6 drop [] equals"
+"[]  0 drop [] equals"
+"[]  2 drop [] equals"
+
+;"[4 5][1 0 1 1 0 1 0 0 1] sel  [4 5 4 4 5 4 5 5 4] equals"
+;"[1 1 0] cyc  ord [2 2 2 2 2 2 2 2 2] sel  [1 2 2 4 5 2 7 8 2] equals"
+
+;; stream ops
+"ord 4 N [1 2 3 4] equals"
+"nat 4 N [0 1 2 3] equals"
+"odds 4 N [1 3 5 7] equals"
+"evens 4 N [0 2 4 6] equals"
+"ints 5 N [0 1 -1 2 -2] equals"
+"5 2 by 4 N [5 7 9 11] equals"
+
+;; stream math
+"ord sq 4 N [1 4 9 16] equals"
+"ord 10 * 5 N [10 20 30 40 50] equals"
+"ord +^ 5 N [1 3 5 7 9] equals "
+"nat +\ 6 N [0 1 3 6 10 15] equals"
+"nat 6 N +/ 15 equals"
+"ord 0 1 tog * 8 N [0 2 0 4 0 6 0 8] equals"
+"ord 0 tog 8 N [1 0 2 0 3 0 4 0] equals"
+"ord 0 1 tog tog 8 N [1 0 2 1 3 0 4 1] equals"
+
+;; cat
+"[1 2 3][4 5 6] $ [1 2 3 4 5 6] equals"
+"[[1 2] [[3 [4]]][5]] $/ [1 2 [3 [4]] 5] equals"
+"[[[1] [2]] [[3 [4]]][[5]]] $/ $/ [1 2 3 [4] 5] equals"
+
+
+;; conversions
+"ordz 5 N V [1 2 3 4 5] equals"
+"ordz 1000 N V ord  1000 N equals"
+"ord  1000 N Z ordz 1000 N equals"
+"[1 2 3] Z V [1 2 3] equals"
+"[1 2 3] Z [1 2 3] equals not"
+
+
+;; ordering
+"[1 2 3 4] mirror0 [1 2 3 4 3 2] equals"
+"[1 2 3 4] mirror1 [1 2 3 4 3 2 1] equals"
+"[1 2 3 4] mirror2 [1 2 3 4 4 3 2 1] equals"
+"[1 2 3 4] @ bub [[1][2][3][4]] equals"
+"[1 2 3 4] @ 2 nbub [[[1]] [[2]] [[3]] [[4]]] equals"
+" [1 2 3 4] @ 0 nbub [1 2 3 4] equals"
+"[[1][2][3][4]] $/ [1 2 3 4] equals"
+"[1 2 3 4 5] muss sort [1 2 3 4 5] equals"
+"[1 2 3 4 5] muss sort> [5 4 3 2 1] equals"
+"[3 4 2 5 1] sort [1 2 3 4 5] equals"
+"[3 4 2 5 1] sort> [5 4 3 2 1] equals"
+"[3 4 2 5 1] grade #[4 2 0 1 3] equals"
+"[3 4 2 5 1] grade> #[3 1 0 2 4] equals"
+"1 100 to = a  a muss a equals not"  
+"1 20 to = a  a muss sort a equals"  
+"[] cyc [] equals"
+"[] 4 ncyc [] equals"
+"[1 2 3] 0 ncyc [] equals"
+"[1 2 3] 1 ncyc [1 2 3] equals"
+"[1 2 3] 2 ncyc [1 2 3 1 2 3] equals"
+"[1 2 3] -1 ncyc [] equals"
+"[[1 2] [[3 [4]]][5]] flat [1 2 3 4 5] equals"
+"[[[]]] flat [] equals"
+"1 64 to 2 clump 2 clump 2 clump flat 1 64 to equals"
+"[1 2 [] 3 [[]] 4 [[[[[5]]]]] 6] flat [1 2 3 4 5 6] equals"
+"[[[[1 2 3]]]] 0 flatten [[[[1 2 3]]]] equals"
+"[[[[1 2 3]]]] 1 flatten [[[1 2 3]]] equals"
+"[[[[1 2 3]]]] 2 flatten [[1 2 3]] equals"
+"[[[[1 2 3]]]] 3 flatten [1 2 3] equals"
+"[[[[1 2 3]]]] 4 flatten [1 2 3] equals"
+"[[[[1 2 3]]]] 999 flatten [1 2 3] equals"
+"[1 2 3] 4 add [1 2 3 4] equals"
+"[] 1 add [1] equals"
+"[] [] add [[]] equals"
+"[2 3 4] 1 cons [1 2 3 4] equals"
+"[] 1 cons [1] equals"
+"[1 2 3 4] head 1 equals"
+"ord head 1 equals"
+"[1 2 3 4] tail [2 3 4] equals"
+"[] empty"
+"[1] empty not"
+"[] nonempty not"
+"[1] nonempty"
+
+;; mapping
+"1 8 to @ \x [ x x 1 + / ] ! 1 8 to aa 1 + / equals"
+
+;; function
+;;"0 = fac   \n[n 2 < \[1]\[n n dec fac *] if] = fac  [0 1 2 3 4 5 6] @ `fac ! [1 1 2 6 24 120 720] equals"
+
+
+;; at
+" [1 2 3]  0 at 1 equals"
+" [1 2 3]  1 at 2 equals"
+" [1 2 3]  2 at 3 equals"
+" [1 2 3]  3 at 0 equals"
+" [1 2 3] -1 at 0 equals"
+" [1 2 3][0 2] at [1 3] equals"
+" [] 0 at 0 equals"
+" [] 1 at 0 equals"
+" [] -1 at 0 equals"
+" [1] 0 at 1 equals"
+" [1] 1 at 0 equals"
+" [1] -1 at 0 equals"
+
+"[[1 2 3] 4 [5 6] cyc] flop [[1 4 5][2 4 6][3 4 5]] equals"
+"[7 8 9][0 2 2 1 0 1 -1 2 3 4] at [7 9 9 8 7 8 0 9 0 0] equals"
+"[7 8 9][0 2 2 1 0 1 -1 2 3 4] wrapAt [7 9 9 8 7 8 9 9 7 8] equals"
+"[7 8 9][0 2 2 1 0 1 -1 2 3 4] clipAt [7 9 9 8 7 8 7 9 9 9] equals"
+"[7 8 9][0 2 2 1 0 1 -1 2 3 4 5 6] foldAt [7 9 9 8 7 8 8 9 8 7 8 9] equals"
+
+
+" [1 2 3]  [2] at  [3] equals"
+" [1 2 3] #[2] at  [3] equals"
+"#[1 2 3]  [2] at  [3] equals"
+"#[1 2 3] #[2] at #[3] equals"
+" [1 2 3]  [ ] at  [ ] equals"
+
+;; filter
+"[][0 1 1 0 1] ? [] equals"
+"[1 2 3 4 5][] ? [] equals"
+
+"[1 2 3 4 5][0 1 1 0 1] ? [2 3 5] equals"
+"[1 2 3 4 5][0] ? [] equals"
+"[1 2 3 4 5][3 1 0 2 0] ? [1 1 1 2 4 4] equals"
+"[1 2 3] cyc [1 1 0 0 1 1 0 1 0 1] ? [1 2 2 3 2 1] equals"
+"[1 2 3 4 5 6 7][1 0] cyc ? [1 3 5 7] equals"
+"ord [1 0] cyc ? 100 N 100 1 2 nby equals"
+
+"[][1 1 1 1 0 0 0 0] skipWhile [] equals"
+"[1][1 1 1 1 0 0 0 0] skipWhile [] equals"
+"[1 2 3 4 5 6][] skipWhile [1 2 3 4 5 6] equals"
+
+"[][1 1 1 1 0 0 0 0] keepWhile [] equals"
+"[1][1 1 1 1 0 0 0 0] keepWhile [1] equals"
+"[1 2 3 4 5 6][] keepWhile [] equals"
+
+"[1 2 3 4 5 6][1 1 1 1 0 0 0 0] skipWhile [5 6] equals"
+"[1 2 3 4 5 6] \x[x 5 <] skipWhile [5 6] equals"
+"[1 2 3 4 5 6][1 1 1 1 0 0 0 0] keepWhile [1 2 3 4] equals"
+"[1][1 1 1 1 0 0 0 0] keepWhile [1] equals"
+"[1 2 3 4 5 6][1] keepWhile [1] equals"
+"[1 2 3 4 5 6][0] keepWhile [] equals"
+"[1 2 3 4 5 6][] keepWhile [] equals"
+"[][1 1 1 1 0 0 0 0] keepWhile [] equals"
+"[1 2 3 4 5 6] \x[x 5 <] keepWhile [1 2 3 4] equals"
+
+"[1 2 3] 2 ? [1 1 2 2 3 3] equals"
+;;"[1 2 3 4 5] 3 1 slide [1 2 3 2 3 4 3 4 5] equals"
+"[1 2 3 4 5] 2 clump [[1 2][3 4]] equals"
+
+;; deep mapping
+"[10 20]@  [1 2]   + [[11 12][21 22]] equals"
+"[10 20]   [1 2]@  + [[11 21][12 22]] equals"
+"[10 20]@  [1 2]@  + [11 22] equals"
+"[10 20]@1 [1 2]@2 + [[11 12][21 22]] equals"
+"[10 20]@2 [1 2]@1 + [[11 21][12 22]] equals"
+"[[10 20][30 40]]     [1 2] + [[11 21] [32 42]] equals"
+"[[10 20][30 40]] @   [1 2] + [[11 22] [31 42]] equals"
+"[[10 20][30 40]] @@  [1 2] + [[[11 12] [21 22]] [[31 32] [41 42]]] equals"
+"[[10 20][30 40]] @@@ [1 2] + [[[11 12] [21 22]] [[31 32] [41 42]]] equals"
+"[[10 20][30 40]] @1  [1 2] @2 + [[[11 21] [12 22]] [[31 41] [32 42]]] equals"
+"[[10 20][30 40]] @2  [1 2] @1 + [[[11 21] [31 41]] [[12 22] [32 42]]] equals"
+"[[10 20][30 40]]     \x [x aa neg 2ple] !  [[[10 20] [30 40]] [[-10 -20] [-30 -40]]] equals"
+"[[10 20][30 40]] @   \x [x aa neg 2ple] !  [[[10 20] [-10 -20]] [[30 40] [-30 -40]]] equals"
+"[[10 20][30 40]] @@  \x [x aa neg 2ple] !  [[[10 -10] [20 -20]] [[30 -30] [40 -40]]] [[[10 -10] [20 -20]] [[30 -30] [40 -40]]] equals"
+"[[10 20][30 40]] @@@ \x [x aa neg 2ple] !  [[[10 -10] [20 -20]] [[30 -30] [40 -40]]] [[[10 -10] [20 -20]] [[30 -30] [40 -40]]] equals"
+"[1 'a [] \[] {:a 1}] @ type ['Real 'String 'VList 'Fun 'Form] equals"
+
+;; a list comprehension
+"20 \n [1 n to @ \a [a n to @ \b [b n to @ \c [ b sq a sq + c sq == \[ a b gcd c gcd 1 > \[[]] \[[[a b c]]] if ]\[[]] if] ! $/ ] ! $/ ] ! $/ ] !
+[[3 4 5] [5 12 13] [8 15 17]] equals"
+
+;; auto mapping
+"1 1 5 to to  [[1][1 2][1 2 3][1 2 3 4][1 2 3 4 5]] equals"
+"ord 3 1 to N [[1 2 3][1 2][1]] equals"
+"0 [1 2 3] by @ [4 5 6] @ N   [[0 1 2 3] [0 2 4 6 8] [0 3 6 9 12 15]] equals"
+"[4 5 6] 0 [1 2 3] nby   [[0 1 2 3] [0 2 4 6 8] [0 3 6 9 12 15]] equals"
+
+;; forms
+"{:a 1 :b 2 :c 3}.a 1 equals"
+"{:a 1 :b 2 :c 3}.b 2 equals"
+"{:a 1 :b 2 :c 3}.c 3 equals"
+"{{{:a 1} :b 2} :c 3}.a 1 equals"
+"{{{:a 1} :b 2} :c 3}.b 2 equals"
+"{{{:a 1} :b 2} :c 3}.c 3 equals"
+"{:a 1} {:a 1} equals"
+"{:a 1} {:a 2} equals not"
+"{:a 1} {:a 1 :b 2} equals not"
+"{:a 1 :b 2} {:a 1} equals not"
+"{{:c 2} :a 1} {{:c 2} :a 1} equals"
+"{{:c 2} :a 1} {{:c 3} :a 1} equals not"
+"{{:c 3} :a 1} {{:c 2} :a 1} equals not"
+"{:a 1} = a    {a :b 2} = b    b {{:a 1} :b 2}   equals"
+
+"{:a 1 :b 2 :c 3} 'a has"
+"{:a 1 :b 2 :c 3} 'b has"
+"{:a 1 :b 2 :c 3} 'c has"
+"{:a 1 :b 2 :c 3} 'd has not"
+"{{{:a 1} :b 2} :c 3} 'a has"
+"{{{:a 1} :b 2} :c 3} 'b has"
+"{{{:a 1} :b 2} :c 3} 'c has"
+"{{{:a 1} :b 2} :c 3} 'd has not"
+"{:a 1 :b 2 :c 3} keys sort ['a 'b 'c] equals"
+"{:a 1 :b 2 :c 3} values sort [1 2 3] equals"
+"{:a 1 :b 2 :c 3} kv \k v[ k sort ['a 'b 'c] equals v sort [1 2 3] equals &] !"
+"{{{:a 1} :b 2} :c 3} keys ['c] equals" ;; should this return all keys or only local keys?
+
+"{{{:a 1} :b 2} :c 3} parent {{:a 1} :b 2} equals"
+"{{{:a 1} :b 2} :c 3} local {:c 3} equals"
+"{{{:a 1} :b 2} :c 3} 'a dot 1 equals"
+"{{{:a 1} :b 2} :c 3} 'b dot 2 equals"
+"{{{:a 1} :b 2} :c 3} 'c dot 3 equals"
+
+;; tests to verify that inheritance conforms to "A Monotonic Superclass Linearization for Dylan" Kim Barrett, et al.
+"
+{:name 'object} = object
+{object :name 'boat} = boat
+{boat :name 'day-boat} = day-boat
+{boat :name 'wheel-boat} = wheel-boat
+{day-boat :name 'engineless} = engineless
+{day-boat :name 'small-multihull} = small-multihull
+{small-multihull :name 'small-catamaran} = small-catamaran
+{[engineless wheel-boat] :name 'pedal-wheel-boat} = pedal-wheel-boat
+{[pedal-wheel-boat small-catamaran] :name 'pedalo} = pedalo
+
+{{{{{{{{{	
+	:name 'object}
+	:name 'boat}
+	:name 'wheel-boat}
+	:name 'day-boat}
+	:name 'small-multihull}
+	:name 'small-catamaran}
+	:name 'engineless}
+	:name 'pedal-wheel-boat}
+	:name 'pedalo}
+pedalo equals
+"
+"
+{:name 'pane} = pane
+{:name 'scrolling-mixin} = scrolling-mixin
+{:name 'editing-mixin} = editing-mixin
+{[pane scrolling-mixin] :name 'scrollable-pane} = scrollable-pane
+{[pane editing-mixin] :name 'editable-pane} = editable-pane
+{[scrollable-pane editable-pane] :name 'editable-scrollable-pane} = editable-scrollable-pane
+
+{{{{{{
+	:name 'editing-mixin}
+	:name 'scrolling-mixin}
+	:name 'pane}
+	:name 'editable-pane}
+	:name 'scrollable-pane}
+	:name 'editable-scrollable-pane}
+
+editable-scrollable-pane equals
+"
+
+] aa pr cr
+\s [ "Testing : " pr s pr cr
+	s compile !
+	\[ "Passed" pr cr]
+	\[
+		"*** FAILED ***" pr cr cr
+		throwOnError \[throw] \[] if
+	] if
+] do
+
+
+

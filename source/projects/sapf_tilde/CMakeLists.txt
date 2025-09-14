@@ -19,7 +19,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 
-set(SOURCE_DIR ${CMAKE_SOURCE_DIR}/source/projects/sapf_lib/src)
+set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 set(CPP_SOURCES
 	${SOURCE_DIR}/CoreOps.cpp
@@ -85,7 +85,7 @@ target_include_directories(
 	${PROJECT_NAME}
 	PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}
-	${CMAKE_SOURCE_DIR}/source/projects/sapf_lib/include
+	${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_compile_definitions(

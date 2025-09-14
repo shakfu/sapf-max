@@ -102,7 +102,6 @@ void sapf_stack(t_sapf* x);
 void sapf_clear(t_sapf* x);
 
 // Max-specific audio functions
-void playWithMaxAudio(Thread& th, V& v);
 void addMaxSpecificOps();
 void outputStackToTextOutlet(t_sapf* x);
 void sapf_fill(t_sapf* x, long numFrames, float* outBuffer);
@@ -150,160 +149,100 @@ void initSapfBuiltins()
     }
 }
 
-// Max-specific implementation of play that captures audio generator (not plays audio)
-void playWithMaxAudio(Thread& th, V& v)
-{
-    if (!gCurrentSapfObject) {
-        post("sapf~: Error - No Max object available for audio capture");
-        return;
-    }
-
-    // CRITICAL: Stop any AudioUnit playback first to prevent conflicts
-    stopPlaying();
-    post("sapf~: AudioUnit playback stopped");
-
-    post("sapf~: play command intercepted - capturing audio generator for Max audio system");
-
-    try {
-        // Clear any existing audio state
-        gCurrentSapfObject->hasValidAudio = 0;
-        gCurrentSapfObject->numAudioChannels = 0;
-
-        // Determine the type of audio generator we have
-        const char* resultType = "Unknown";
-        if (v.isReal()) {
-            resultType = "Real";
-        } else if (v.isObject()) {
-            Object* objPtr = v.o();
-            if (objPtr != nullptr) {
-                const char* typeName = objPtr->TypeName();
-                if (typeName != nullptr) {
-                    resultType = typeName;
-                } else {
-                    resultType = "CorruptedObject";
-                }
-            } else {
-                resultType = "NullObject";
-            }
-        } else {
-            resultType = "Other";
-        }
-
-        post("sapf~: play - Capturing audio generator, type: %s", resultType);
-
-        // The key insight: Instead of calling the sapf audio system (which uses AudioUnit),
-        // we capture the audio generator and let Max's sapf_perform64 generate audio directly
-        bool audioGeneratorCaptured = false;
-
-        // Check for audio-compatible generators (ZIn-compatible data)
-        if (v.isZIn() || (v.isObject() && v.o() &&
-                         (strcmp(resultType, "ZList") == 0 || strcmp(resultType, "VList") == 0))) {
-
-            // Single channel audio generator
-            gCurrentSapfObject->audioExtractor.set(v);
-            gCurrentSapfObject->numAudioChannels = 1;
-            gCurrentSapfObject->hasValidAudio = 1;
-            audioGeneratorCaptured = true;
-
-            post("sapf~: ✓ Single-channel audio generator captured (type: %s)", resultType);
-
-        } else if (v.isList()) {
-            // Handle list data - could be multi-channel generators
-            P<List> resultList = (List*)v.o();
-            if (resultList) {
-                if (resultList->isFinite()) {
-                    Array* channels = resultList->mArray.get();
-                    if (channels != nullptr && channels->size() > 1) {
-                        // Multi-channel audio generators
-                        int numChannels = std::min((int)channels->size(), 8);
-                        bool allChannelsValid = true;
-
-                        // Validate all channels are audio generators
-                        for (int i = 0; i < numChannels && allChannelsValid; i++) {
-                            V channelData = channels->at(i);
-                            if (!channelData.isZIn() && !(channelData.isObject() && channelData.o())) {
-                                allChannelsValid = false;
-                            }
-                        }
-
-                        if (allChannelsValid) {
-                            // Set up multi-channel audio generators
-                            for (int i = 0; i < numChannels; i++) {
-                                V channelData = channels->at(i);
-                                gCurrentSapfObject->audioExtractors[i].set(channelData);
-                            }
-                            gCurrentSapfObject->numAudioChannels = numChannels;
-                            gCurrentSapfObject->hasValidAudio = 1;
-                            audioGeneratorCaptured = true;
-
-                            post("sapf~: ✓ %d-channel audio generators captured", numChannels);
-                        } else {
-                            // Mixed data - fall back to single channel
-                            gCurrentSapfObject->audioExtractor.set(v);
-                            gCurrentSapfObject->numAudioChannels = 1;
-                            gCurrentSapfObject->hasValidAudio = 1;
-                            audioGeneratorCaptured = true;
-
-                            post("sapf~: ✓ Mixed list data - captured as single-channel generator");
-                        }
-                    } else {
-                        // Single item list or empty list
-                        gCurrentSapfObject->audioExtractor.set(v);
-                        gCurrentSapfObject->numAudioChannels = 1;
-                        gCurrentSapfObject->hasValidAudio = 1;
-                        audioGeneratorCaptured = true;
-
-                        post("sapf~: ✓ Single-item list captured as audio generator");
-                    }
-                } else {
-                    // Infinite list - treat as single channel generator
-                    gCurrentSapfObject->audioExtractor.set(v);
-                    gCurrentSapfObject->numAudioChannels = 1;
-                    gCurrentSapfObject->hasValidAudio = 1;
-                    audioGeneratorCaptured = true;
-
-                    post("sapf~: ✓ Infinite list captured as single-channel generator");
-                }
-            }
-        }
-
-        if (!audioGeneratorCaptured) {
-            post("sapf~: Warning - 'play' called with non-audio generator (type: %s)", resultType);
-            post("sapf~: Audio output will be silent");
-        } else {
-            // Increment audio state version to signal new audio generators
-            ATOMIC_INCREMENT(&gCurrentSapfObject->audioStateVersion);
-            post("sapf~: Audio generator successfully captured - Max will generate audio in sapf_perform64");
-        }
-
-    } catch (const std::exception& e) {
-        post("sapf~: Error capturing audio generator: %s", e.what());
-        if (gCurrentSapfObject) {
-            gCurrentSapfObject->hasValidAudio = 0;
-            gCurrentSapfObject->numAudioChannels = 0;
-        }
-    }
-}
 
 // Max-specific play primitive that uses Max audio instead of AudioUnit
 static void playMax_(Thread& th, Prim* prim)
 {
     post("sapf~: DEBUG - playMax_ called (Max audio route)");
+
+    if (!gCurrentSapfObject) {
+        error("sapf~: No current sapf object for audio playback");
+        return;
+    }
+
     V v = th.popList("play : list");
-    playWithMaxAudio(th, v);
+
+    // Directly capture audio generator without calling AudioUnit code
+    try {
+        t_sapf* x = gCurrentSapfObject;
+
+        if (v.isList()) {
+            if (v.isZList()) {
+                // Single channel
+                x->audioExtractor.set(v);
+                x->numAudioChannels = 1;
+                x->hasValidAudio = 1;
+                post("sapf~: ✓ Single-channel audio generator captured for Max");
+            } else {
+                // Multi-channel - use the first channel for now
+                if (!v.isFinite()) {
+                    post("sapf~: Error: Infinite lists not supported for multi-channel audio");
+                    return;
+                }
+
+                P<List> s = (List*)v.o();
+                s = s->pack(th, 32); // Max 32 channels
+                if (!s()) {
+                    post("sapf~: Error: Too many channels");
+                    return;
+                }
+
+                Array* a = s->mArray();
+                int numChannels = std::min((int)a->size(), 32);
+
+                // For now, just use the first channel
+                if (numChannels > 0) {
+                    x->audioExtractor.set(a->at(0));
+                    x->numAudioChannels = 1; // TODO: Implement multi-channel properly
+                    x->hasValidAudio = 1;
+                    post("sapf~: ✓ Multi-channel audio generator captured (using channel 0)");
+                }
+            }
+        } else {
+            post("sapf~: Error: play requires a list argument");
+        }
+
+    } catch (const std::exception& e) {
+        error("sapf~: Error in playMax_: %s", e.what());
+        if (gCurrentSapfObject) {
+            gCurrentSapfObject->hasValidAudio = 0;
+        }
+    } catch (...) {
+        error("sapf~: Unknown error in playMax_");
+        if (gCurrentSapfObject) {
+            gCurrentSapfObject->hasValidAudio = 0;
+        }
+    }
+}
+
+// Max-specific stop primitive that stops Max audio instead of AudioUnit
+static void stopMax_(Thread& th, Prim* prim)
+{
+    post("sapf~: DEBUG - stopMax_ called (Max audio route)");
+
+    if (gCurrentSapfObject) {
+        gCurrentSapfObject->hasValidAudio = 0;
+        gCurrentSapfObject->numAudioChannels = 0;
+        post("sapf~: ✓ Max audio generation stopped");
+    } else {
+        post("sapf~: Warning - No current sapf object to stop");
+    }
 }
 
 // Add Max-specific primitives that override standard ones
 void addMaxSpecificOps()
 {
-    post("sapf~: Adding Max-specific primitives (overriding 'play')");
+    post("sapf~: Adding Max-specific primitives (overriding 'play' and 'stop')");
 
     try {
         // Override the 'play' primitive to use Max audio instead of AudioUnit
         // This must be called after AddStreamOps() to override the standard play
         vm.def("play", 1, 0, playMax_, "(channels -->) plays the audio to Max outputs.");
 
-        post("sapf~: ✓ Max-specific 'play' primitive installed");
+        // Override the 'stop' primitive to stop Max audio instead of AudioUnit
+        vm.def("stop", 0, 0, stopMax_, "() stops audio playback.");
+
+        post("sapf~: ✓ Max-specific 'play' and 'stop' primitives installed");
 
     } catch (const std::exception& e) {
         error("sapf~: Error adding Max-specific primitives: %s", e.what());
@@ -623,7 +562,7 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
             x->audioThread = new Thread();
 
             // Load prelude file from its known location in the project
-            const char* preludePath = "../../../../source/projects/sapf_lib/sapf-prelude.txt";
+            const char* preludePath = "sapf-prelude.txt";
             try {
                 post("sapf~: Loading prelude file: %s", preludePath);
                 loadFile(*x->sapfThread, preludePath);
@@ -787,6 +726,9 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         return;
     }
 
+    // Check if this code contains 'play' command
+    bool containsPlay = (codeBuffer.find("play") != std::string::npos);
+
     // Phase 3: Function execution and stack management (only for new compilations)
     if (needsRecompilation && compilation.compiledFunction) {
         ExecutionResult execution = sapf_executeCode(x, compilation.compiledFunction);
@@ -794,13 +736,23 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
             if (!execution.errorMessage.empty()) {
                 error("sapf~: ✗ %s", execution.errorMessage.c_str());
             }
+        } else {
+            // Successful execution - handle results based on whether this was a 'play' command
+            if (containsPlay) {
+                post("sapf~: ✓ Audio command executed - audio routed to Max output");
+                // Don't output stack contents for 'play' commands - they consume the stack
+            } else {
+                // Non-play command: output stack contents to text outlet (like sapf REPL)
+                post("sapf~: ✓ Stack expression executed - output to text outlet");
+                outputStackToTextOutlet(x);
+            }
         }
         // Note: Audio processing is now handled by the 'play' primitive itself
         // We don't need to process stack results for audio here anymore
+    } else if (!containsPlay) {
+        // Even if we didn't recompile, output stack for non-play commands
+        outputStackToTextOutlet(x);
     }
-
-    // Phase 5: Output stack contents to text outlet (like sapf REPL)
-    outputStackToTextOutlet(x);
 
     // Phase 6: Final status reporting
     sapf_reportStatus(x, x->compilationError, x->hasValidAudio, x->compiledFunction);

@@ -1,0 +1,1125 @@
+
+
+;;;; shortcuts
+
+`clear = c
+`cleard = cd
+`stop = s
+
+;;;; useful constants
+
+5 sqrt 1 + 2 / = phi 	;; golden ratio
+
+1 exp = e				;; base of the natural logarithm
+
+.5 sqrt = hrt			;; sqrt(2)/2
+
+ 1 0 / = inf
+-1 0 / = -inf
+ 0 0 / = nan
+
+440 log2 = A4;     ;; pitch of A 440 in octaves above 1 Hz.
+A4 9/12 - = C4     ;; pitch of middle C in octaves above 1 Hz.
+C4 2^ = C4hz       ;; frequency of middle C in Hz.
+
+nyq .9 * = nyq90   ;; 90 percent of nyquist
+24k nyq90 & = freqLimit	;; a useful frequency for limiting filter cutoffs
+
+
+"zxcvbnm,./asdfghjklqwertyuiop1234567890" = USkb40
+"zxcvbnm,./~~~asdfghjkl;'~qwertyuiop[]\1234567890-=~" = USkb49
+
+"\\n*** printing ***" helpLine
+
+\list 
+	"(list -->) print every item in a list on a separate line" 
+	[list \a [a pr cr] do] = prall
+
+"\\n*** common counts ***" helpLine
+
+\a "(a --> [a a]) a 2 X"     [`a 2 X] = 2X
+\a "(a --> [a a a]) a 3 X"   [`a 3 X] = 3X
+\a "(a --> [a a a a]) a 4 X" [`a 4 X] = 4X
+\a "(a --> [a .. a]) a 5 X"  [`a 5 X] = 5X
+\a "(a --> [a .. a]) a 6 X"  [`a 6 X] = 6X
+\a "(a --> [a .. a]) a 7 X"  [`a 7 X] = 7X
+\a "(a --> [a .. a]) a 8 X"  [`a 8 X] = 8X
+\a "(a --> [a .. a]) a 9 X"  [`a 9 X] = 9X
+
+\a "(a --> #[a a]) a 2 XZ"     [`a 2 XZ] = 2XZ
+\a "(a --> #[a a a]) a 3 XZ"   [`a 3 XZ] = 3XZ
+\a "(a --> #[a a a a]) a 4 XZ" [`a 4 XZ] = 4XZ
+\a "(a --> #[a .. a]) a 5 XZ"  [`a 5 XZ] = 5XZ
+\a "(a --> #[a .. a]) a 6 XZ"  [`a 6 XZ] = 6XZ
+\a "(a --> #[a .. a]) a 7 XZ"  [`a 7 XZ] = 7XZ
+\a "(a --> #[a .. a]) a 8 XZ"  [`a 8 XZ] = 8XZ
+\a "(a --> #[a .. a]) a 9 XZ"  [`a 9 XZ] = 9XZ
+
+\a "(a --> b) keeps the first item of the list a"    [a 1 N] = 1N
+\a "(a --> b) keeps the first 2 items of the list a" [a 2 N] = 2N
+\a "(a --> b) keeps the first 3 items of the list a" [a 3 N] = 3N
+\a "(a --> b) keeps the first 4 items of the list a" [a 4 N] = 4N
+\a "(a --> b) keeps the first 5 items of the list a" [a 5 N] = 5N
+\a "(a --> b) keeps the first 6 items of the list a" [a 6 N] = 6N
+\a "(a --> b) keeps the first 7 items of the list a" [a 7 N] = 7N
+\a "(a --> b) keeps the first 8 items of the list a" [a 8 N] = 8N
+\a "(a --> b) keeps the first 9 items of the list a" [a 9 N] = 9N
+
+\a "(a --> b) skips the first item of the list a"    [a 1 N>] = 1N>
+\a "(a --> b) skips the first 2 items of the list a" [a 2 N>] = 2N>
+\a "(a --> b) skips the first 3 items of the list a" [a 3 N>] = 3N>
+\a "(a --> b) skips the first 4 items of the list a" [a 4 N>] = 4N>
+\a "(a --> b) skips the first 5 items of the list a" [a 5 N>] = 5N>
+\a "(a --> b) skips the first 6 items of the list a" [a 6 N>] = 6N>
+\a "(a --> b) skips the first 7 items of the list a" [a 7 N>] = 7N>
+\a "(a --> b) skips the first 8 items of the list a" [a 8 N>] = 8N>
+\a "(a --> b) skips the first 9 items of the list a" [a 9 N>] = 9N>
+
+\n "(n --> [-1 ...]) returns a stream of n minus ones." [n -1 0 nby] = -1s
+\n "(n --> [0 ...]) returns a stream of n zeroes." [n 0 0 nby] = 0s
+\n "(n --> [1 ...]) returns a stream of n ones." [n 1 0 nby] = 1s
+\n "(n --> [2 ...]) returns a stream of n twos." [n 2 0 nby] = 2s
+
+\n "(n --> #[-1 ...]) returns a signal of n minus ones." [n -1 0 nbyz] = -1z
+\n "(n --> #[0 ...]) returns a signal of n zeroes." [n 0 0 nbyz] = 0z
+\n "(n --> #[1 ...]) returns a signal of n ones." [n 1 0 nbyz] = 1z
+\n "(n --> #[2 ...]) returns a signal of n twos." [n 2 0 nbyz] = 2z
+
+"\\n*** list ops ***" helpLine
+\a "(a --> a[0]) get the item at index 0" [a 0 at] = 0at
+\a "(a --> a[1]) get the item at index 1" [a 1 at] = 1at
+\a "(a --> a[2]) get the item at index 2" [a 2 at] = 2at
+\a "(a --> a[3]) get the item at index 3" [a 3 at] = 3at
+\a "(a --> a[4]) get the item at index 4" [a 4 at] = 4at
+\a "(a --> a[5]) get the item at index 5" [a 5 at] = 5at
+\a "(a --> a[6]) get the item at index 6" [a 6 at] = 6at
+\a "(a --> a[7]) get the item at index 7" [a 7 at] = 7at
+\a "(a --> a[8]) get the item at index 8" [a 8 at] = 8at
+\a "(a --> a[9]) get the item at index 9" [a 9 at] = 9at
+
+"\\n*** ordinal accessing ***" helpLine
+\a "(a --> a[0]) get the first item"   [a 0 at] = 1st
+\a "(a --> a[1]) get the second item"  [a 1 at] = 2nd
+\a "(a --> a[2]) get the third item"   [a 2 at] = 3rd
+\a "(a --> a[3]) get the fourth item"  [a 3 at] = 4th
+\a "(a --> a[4]) get the fifth item"   [a 4 at] = 5th
+\a "(a --> a[5]) get the sixth item"   [a 5 at] = 6th
+\a "(a --> a[6]) get the seventh item" [a 6 at] = 7th
+\a "(a --> a[7]) get the eighth item"  [a 7 at] = 8th
+\a "(a --> a[8]) get the ninth item"   [a 8 at] = 9th
+\a "(a --> a[9]) get the tenth item"   [a 9 at] = 10th
+
+\a "(a --> b) get the last value of a. or zero if empty." [a size = sz sz 0 == 0 \[a sz -- at] if] = last
+
+\a b
+ 	"(a b --> c d) separates the list a such that list c contains all items of a for which b is true and list d contains all items of a for which b is false."
+	[a b ? a b ~ ?] = separate
+	
+\a b
+ 	"(a b --> c d) separates the list a such that list c contains all items of a for which b is true and list d contains all items of a for which b is false."
+	[a b ? a b ~ ?] = span
+
+\a
+	"(a --> b) returns a list of the number of consecutive occurrences of items in the input list."
+	[ord a !=^ tail 1 add ? -^] = runlengths
+
+\a b
+	"(a b --> div mod) equivalent to ((a b idiv)(a b imod))"
+	[a b idiv a b imod] = divmod
+
+"\\n*** each operators ***\\n" helpLine
+
+\a b
+	"(a b --> a @ b @) apply the each operator to two items on the stack"
+	[a @ b @] = each2
+
+\a b c
+	"(a b c --> a @ b @ c @) apply the each operator to three items on the stack"
+	[a @ b @ c @] = each3
+
+\a b c d
+	"(a b c d --> a @ b @ c @ d @) apply the each operator to four items on the stack"
+	[a @ b @ c @ d @] = each4
+
+\a b
+	"(a b --> a @1 b @2) apply the each operator for a cartesian product to two items on the stack"
+	[a @1 b @2] = cart2
+
+\a b c
+	"(a b c --> a @1 b @2 c @3) apply the each operator for a cartesian product to three items on the stack"
+	[a @1 b @2 c @3] = cart3
+
+\a b c d
+	"(a b c d --> a @1 b @2 c @3 d @4) apply the each operator for a cartesian product to four items on the stack"
+	[a @1 b @2 c @3 d @4] = cart4
+
+\a b
+	"(a b --> a @2 b @1) apply the each operator for a reverse cartesian product to two items on the stack"
+	[a @2 b @1] = rcart2
+
+\a b c
+	"(a b c --> a @3 b @2 c @1) apply the each operator for a reverse cartesian product to three items on the stack"
+	[a @3 b @2 c @1] = rcart3
+
+\a b c d
+	"(a b c d --> a @4 b @3 c @2 d @1) apply the each operator for a reverse cartesian product to four items on the stack"
+	[a @4 b @3 c @2 d @1] = rcart4
+
+
+"\\n*** list generation ***" helpLine
+
+\n
+	"(n --> stream) finite stream of counting numbers. equivalent to: ord n N"
+	[n 1 1 nby] = nord
+
+\n
+	"(n --> stream) finite signal of counting numbers. equivalent to: ordz n N"
+	[n 1 1 nbyz] = nordz
+
+\n
+	"(n --> stream) finite stream of counting numbers. equivalent to: nat n N"
+	[n 0 1 nby] = nnat
+
+\n
+	"(n --> stream) finite signal of counting numbers. equivalent to: natz n N"
+	[n 0 1 nbyz] = nnatz
+
+\x n
+ 	"(x n --> b) divide x by n and make a list repeating that value n times. Useful for tupletizing a duration."
+	[ x n / n X] = /X
+
+
+"\\n*** range mapping ***" helpLine
+
+\a b
+ 	"(L R --> M S) or (M S --> L R) stereo to mid-side conversion. this function is self inverse."
+	[a b + hrt * a b - hrt *] = MS
+
+\a b 
+	"(ctr dev --> lo hi) convert a center and deviation to lo and hi"
+	[a b - a b +] = -+
+	
+\a b 
+	"(a b --> hi lo) convert a center and deviation to hi and lo"
+	[a b + a b -] = +-
+
+\a b 
+	"(a b --> a*b a/b) return both product and quotient"
+	[a b * a b /] = muldiv
+
+\a b 
+	"(a b --> a/b a*b) return both quotient and product"
+	[a b / a b *] = divmul
+
+\lo hi
+	"(lo hi --> ctr dev) convert lo and hi to center and deviation"
+	[hi lo avg2 hi lo neg avg2] = cdv 
+
+
+\in lo hi 
+	"(in lo hi --> out) map a unipolar input to the linear interval [lo, hi]"
+	[in hi lo - * lo +] = unilin
+
+\in lo hi 
+	"(in lo hi --> out) map a unipolar input to the linear interval [lo, hi] clip input to bounds."
+	[in 0 1 clip lo hi unilin] = unilinc
+
+\in lo hi 
+	"(in lo hi --> out) map a unipolar input to the exponential interval [lo, hi]" 
+	[hi lo / in pow lo *] = uniexp
+
+\in lo hi 
+	"(in lo hi --> out) map a unipolar input to the exponential interval [lo, hi] clip input to bounds." 
+	[in 0 1 clip lo hi uniexp] = uniexpc
+
+\in lo hi 
+	"(in lo hi --> out) map a bipolar input to the linear interval [lo, hi]" 
+	[in biuni lo hi unilin] = bilin
+
+\in lo hi 
+	"(in lo hi --> out) map a bipolar input to the linear interval [lo, hi] clip input to bounds." 
+	[in biuni lo hi unilinc] = bilinc
+
+\in lo hi 
+	"(in lo hi --> out) map a bipolar input to the exponential interval [lo, hi]"
+	[in biuni lo hi uniexp] = biexp
+
+\in lo hi 
+	"(in lo hi --> out) map a bipolar input to the exponential interval [lo, hi] clip input to bounds."
+	[in biuni lo hi uniexpc] = biexpc
+
+\in a b c d 
+	"(in a b c d --> out) map a linear interval [a,b] to a linear interval [c,d]."
+	[in a - d c - b a - / * c +] = linlin
+	
+\in a b c d 
+	"(in a b c d --> out) map a linear interval [a,b] to a linear interval [c,d]. clip input to bounds."
+	[in a b clip a b c d linlin] = linlinc
+
+\in a b c d 
+	"(in a b c d --> out) map a linear interval [a,b] to an exponential interval [c,d]."
+	[d c / in a - b a - / pow c *] = linexp
+
+\in a b c d 
+	"(in a b c d --> out) map a linear interval [a,b] to an exponential interval [c,d]. clip input to bounds."
+	[in a b clip a b c d linexp] = linexpc
+
+\in a b c d 
+	"(in a b c d --> out) map an exponential interval [a,b] to a linear interval [c,d]."
+	[in a / log b a / log / d c - * c +] = explin
+	
+\in a b c d 
+	"(in a b c d --> out) map an exponential interval [a,b] to a linear interval [c,d]. clip input to bounds."
+	[in a b clip a b c d explin] = explinc
+
+\in a b c d 
+	"(in a b c d --> out) map an exponential interval [a,b] to an exponential interval [c,d]"
+	[d c / in a / log b a / log / pow c *] = expexp
+	
+\in a b c d 
+	"(in a b c d --> out) map an exponential interval [a,b] to an exponential interval [c,d]. clip input to bounds."
+	[in a b clip a b c d expexp] = expexpc
+
+
+"\\n*** range checking ***" helpLine
+
+\in lo hi 
+	"(in lo hi --> out) inclusive range check. return 1 if input is in the interval [lo,hi]."
+	[in lo >= in hi <= &] = inrange
+
+\in lo hi 
+	"(in lo hi --> out) exclusive range check. return 1 if input is in the interval (lo,hi)."
+	[in lo > in hi < &] = exrange
+
+
+"\\n*** borrowed from APL ***" helpLine
+
+\a s
+ 	"(list shape --> list) shape is a list of the sizes of each dimension of a matrix into which the input is reshaped."
+	[s tail reverse   a flat cyc s */ N  \a b[b a clump] reduce] = reshape
+	
+\s
+	"(shape --> list) returns a matrix of the positive integers in the given shape."
+	[ord 2 reshape] = iota
+
+
+"\\n*** conditional mapping ***" helpLine
+
+\list bools fun
+	"(list bools fun --> list) apply fun to those values for which the corresponding bool is true. Otherwise pass the value as is."
+	[ bools @ list @ \bool item [bool \[item fun]\[item] if] !] = mapif
+
+
+"\\n*** data flow operators ***" helpLine
+
+\a b f 1.1 
+	"(a b f --> afx bfx) apply a function to top two items. equivalent to: a f b f"
+	[a f b f] = abf
+
+\a b c f 1.1 
+	"(a b c f --> af bf cf) apply a function to top three items. equivalent to: a f b f c f"
+	[a f b f c f] = abcf
+
+\a f 1.1 g 1.1 
+	"(a f g --> af ag) apply two functions to the top item. equivalent to: a f a g"
+	[a f a g] = afg
+
+\a f 1.1 g 1.1 h 1.1 
+	"(a f g h - af ag ah) apply three functions to the top item. equivalent to: a f a g a h"
+	[a f a g a h] = afgh
+
+\a b f 1.1 g 1.1 
+	"(a b f g --> af bg) interleaved application. equivalent to: a f b g"
+	[a f b g] = abfg
+	
+\a b c f 1.1 g 1.1 h 1.1 
+	"(a b c f g h --> af bg ch) interleaved application. equivalent to: a f b g c h"
+	[a f b g c h] = abcfgh
+
+\a b f 2.1 g 2.1
+	"(a b f g --> abf abg) interleaved application of binary operators. equivalent to: a b f a b g"
+	[a b f a b g] = abfg2
+
+"\\n*** statistics ***" helpLine
+
+\a 
+	"(a --> m) mean of list a."
+	[a +/ a size /] = mean
+
+\a x
+	"(a x --> out) return the linear interpolated value of list a at position x."
+	[x frac  a x floor at  a x ceil at  unilin] = atf 
+
+\a 
+	"(a --> m) median of list a."
+	[a sort a size -- /2 atf] = median
+	
+\a 
+	"(a --> v) variance of list a."
+	[a a mean - sq mean] = variance
+	
+\a 
+	"(a --> sd) standard deviation of list a."
+	[a variance sqrt] = deviation
+
+\a 
+	"(a --> |a|) vector magnitude of list a."
+	[a sq +/ sqrt] = vmag
+
+\a
+	"(a --> b) factorial of a"
+	[a ++ tgamma] = fac
+
+"\\n*** numbers ***" helpLine
+
+\x 
+	"(x --> fs) returns a list of the factors of integer x."
+	[x x 1 toz / aa int? ?] = factors
+
+\x 
+	"(x --> fs) returns a list of the prime factors of integer x."
+	[x primez aa x <= keepWhile bab / int? ?] = pfactors
+
+\a b
+	"(a b --> bool) test whether numbers  are coprime."
+	[a b gcd 1 ==] = coprime
+
+\a 
+	"(a --> bool) test whether numbers in list are coprime."
+	[a gcd/ 1 ==] = coprimes
+
+"\\n*** common random number generators ***" helpLine
+
+"\\n*** unipolar random number generators ***" helpLine
+\
+	"(--> r) return a random number from 0 to 1."
+	[0 1 rand] = urand
+	
+\
+	"(--> r) return a stream of random numbers from 0 to 1."
+	[0 1 rands] = urands
+	
+\
+	"(--> r) return a signal of random numbers from 0 to 1."
+	[0 1 randz] = urandz
+	
+\n
+	"(n --> r) return a stream of n random numbers from 0 to 1."
+	[n 0 1 nrands] = nurands
+	
+\n 
+	"(n --> r) return a signal of n random numbers from 0 to 1."
+	[n 0 1 nrandz] = nurandz
+
+"\\n*** bipolar random number generators ***" helpLine
+\
+	"(--> r) return a random number from -1 to 1."
+	[1 rand2] = brand
+	
+\
+	"(--> r) return a stream of random numbers from -1 to 1."
+	[1 rand2s] = brands
+	
+\
+	"(--> r) return a signal of random numbers from -1 to 1."
+	[1 rand2z] = brandz
+	
+\n 
+	"(n --> r) return a stream of n random numbers from -1 to 1."
+	[n 1 nrand2s] = nbrands
+	
+\n 
+	"(n --> r) return a signal of n random numbers from -1 to 1."
+	[n 1 nrand2z] = nbrandz
+	
+"\\n*** random walks ***" helpLine
+
+\step lo hi
+	"(step lo hi --> stream) integer random walk."
+	[step irand2s +\ lo hi irand + lo hi ifold  ] = iwalk
+
+\step limit
+	"(step bounds --> stream) integer random walk. bipolar bounds."
+	[step irand2s +\ limit irand2 + limit ifold2  ] = iwalk2
+
+\step lo hi
+	"(step lo hi --> stream) random walk."
+	[step rand2s +\ lo hi rand + lo hi fold  ] = walk
+
+\step limit
+	"(step bounds --> stream) random walk. bipolar bounds."
+	[step rand2s +\ limit rand2 + limit fold2  ] = walk2
+
+\step lo hi
+	"(step lo hi --> signal) integer random walk."
+	[step irand2z +\ lo hi irand + lo hi ifold  ] = iwalkz
+
+\step limit
+	"(step bounds --> signal) integer random walk. bipolar bounds."
+	[step irand2z +\ limit irand2 + limit ifold2  ] = iwalk2z
+
+\step lo hi
+	"(step lo hi --> signal) random walk."
+	[step rand2z +\ lo hi rand + lo hi fold  ] = walkz
+
+\step limit
+	"(step bounds --> signal) random walk. bipolar bounds."
+	[step rand2z +\ limit rand2 + limit fold2  ] = walk2z
+
+"\\n*** composite ugens ***" helpLine
+
+\sounds susTime xfadeTime density numChannels
+	"(sounds susTime xfadeTime density numChannels --> out) texture of overlapping sounds. OverlapTexture, adapted from SC2"
+	[
+		xfadeTime 2 * susTime + density / = period 
+		#[0 1 1 0] = levels
+		#[xfadeTime susTime xfadeTime] = times
+		`sounds type 'Fun equals 
+		\[ \i[ i sounds levels times 1 lines * ] period 1 numChannels ola ]
+		\[ sounds @ \sound[ sound levels times 1 lines *] ! period 1 numChannels ola ] if
+	] = oltx
+
+\sounds susTime xfadeTime numChannels
+	"(sounds susTime xfadeTime numChannels --> out) texture of crossfaded sounds. XFadeTexture, adapted from SC2"
+	[
+		xfadeTime susTime + = period 
+		#[0 1 1 0] = levels
+		#[xfadeTime susTime xfadeTime] = times
+		`sounds type 'Fun equals 
+		\[ \i[ i sounds levels times 1 lines * ] period 1 numChannels ola ]
+		\[ sounds @ \sound[ sound levels times 1 lines *] ! period 1 numChannels ola ] if
+	] = xftx
+
+\in
+	"(in --> out) 50% chance of flipping the sign"
+	[.5 coin \[in neg]\[in] if] = randsign
+
+\freq root expon 
+	"(freq root exponent --> out) frequency dependent amplitude compensation factor."
+	[ root freq / expon ^] = famp
+
+\freq phase lo hi 
+	"(freq phase lo hi --> out) sine wave lfo with linear range."
+	[freq phase sinosc lo hi bilin] = lfo
+
+\freq phase lo hi 
+	"(freq phase lo hi --> out) sine wave lfo with exponential range."
+	[freq phase sinosc lo hi biexp] = xlfo
+
+\x 
+	"(x --> out) evenly spread an array of mono sources across a stereo field."
+	[x L1 aa size -1 1 lindiv pan2 +/] = splay
+
+\x 
+	"(x --> out) evenly spread an array of mono sources across a stereo field."
+	[x L1 = list x 0 list size -1 1 lindiv brand + rot2 +/] = rsplay
+
+\x maxdelay 
+	"(x maxdelay --> out) evenly spread an array of mono sources across a stereo field using interaural time delay."
+	[x L1 aa size -1 1 lindiv maxdelay itd +/] = splayd
+
+"\\n*** amplitude ***" helpLine
+
+\in
+	"(in --> out) calculate the rms amplitude. input must be finite."
+	[in sq mean sqrt] = rms
+
+\in
+	"(in --> out) calculate the rms amplitude in decibels. input must be finite."
+	[in rms ampdb] = rmsdb
+
+;;\in
+;;	"(in --> amp) amplitude follower." NOW BUILT-IN
+;;	[in hilbert hypot 1m 1c lagud2] = ampf
+	
+;;\in db slopeBelow slopeAbove
+;;	"(in db slopeBelow slopeAbove --> out) dynamic range compressor."
+;;	[in hilbert hypot 1m 1c lagud2] = drc
+
+"\\n*** uses of hilbert processor ***" helpLine
+
+\in shiftHz
+	"(in shiftHz --> out) frequency shifter."
+	[in hilbert 2ple shiftHz [.25 0] sinosc * +/] = freqShift
+
+\in shiftHz
+	"(in shiftHz --> out) single sideband modulator."
+	[in hilbert 2ple shiftHz [.25 0] sinosc * un2 +-] = ssb
+
+\in lfoRate
+	"(in lfoRate --> L R) barberpole phaser."
+	[in lfoRate ssb 2ple in +] = bphaser 
+
+;;.4 white .1 100 xmousex phaser play
+
+"\\n*** simple allpass reverbs ***" helpLine
+
+\in dly dcy 
+	"(in delayTime decayTime --> out) four stage stereo allpass with random delay times"
+	[	
+		in size 2 | = n
+		\z[ z \[.1m dly rand] n X aa dcy alpasn] = r
+		in r r r r
+	] = apverb4
+
+\in dly dcy 
+	"(in delayTime decayTime --> out) six stage stereo allpass with random delay times"
+	[	\z[ z \[.1m dly rand] 2X aa dcy alpasn] = r
+		in r r r r r r
+	] = apverb6
+
+"\\n*** random sweeps and pans ***" helpLine
+
+\d a b
+	"(dur lo hi --> out) random line. both ends are uniformly random between lo and hi."
+	[d a b rand a b rand line] = rline
+
+\d a b
+	"(dur lo hi --> out) exponentially random line. both ends are exponentially random between lo and hi."
+	[d a b xrand a b xrand line] = xrline
+
+\d a b
+	"(dur lo hi --> out) random exponential line. both ends are uniformly random between lo and hi."
+	[d a b rand a b rand xline] = rxline
+
+\d a b
+	"(dur lo hi --> out) exponentially random exponential line. both ends are exponentially random between lo and hi."
+	[d a b xrand a b xrand xline] = xrxline
+
+\in 
+	"(in --> out) stereo pan at a fixed random position."
+	[in 1 rand2 pan2] = rpanl2
+
+\in 
+	"(in --> out) stereo pan at a fixed random position."
+	[in 1 rand2 1m itd] = rpan2
+
+\a b 
+	"(a b --> out) stereo balance at a fixed random position."
+	[a b 1 rand2 bal2] = rbal2
+
+\in 
+	"(in --> out) stereo rotation at a fixed random position."
+	[in 0 1 rand2 rot2] = rrot2
+
+\in dur
+	"(in dur --> out) stereo pan with a random sweep."
+	[in dur 1 rand2 1 rand2 line pan2] = rsweeppan2
+
+
+"\\n*** crossover filters ***" helpLine
+
+\in freq
+	"(in freq --> high_band low_band) Linkwitz-Riley crossover filters. low_band + high_band yields a flat frequency response."
+	[in freq hpf2  in freq lpf2] = crossover
+
+\in freq
+	"(in freq --> high_band low_band) first order crossover filters. low_band + high_band yields a flat frequency response."
+	[in freq hpf1  in freq lpf1] = crossover1
+
+\in freq bw
+	"(in freq bw --> outer_band inner_band) middle crossover. outer_band + inner_band yields a flat frequency response."
+	[in freq bw bsf  in freq bw bpf] = midcrossover
+
+\a b freq
+	"(a b freq --> out) Linkwitz-Riley crossover mixer."
+	[a freq hpf2  b freq lpf2 +] = crossovermix
+
+\a b freq
+	"(a b freq --> out) Linkwitz-Riley crossover mixer."
+	[a freq hpf1  b freq lpf1 +] = crossover1mix
+
+\a b freq bw
+	"(a b freq bw --> out) Linkwitz-Riley crossover mixer."
+	[a freq bw bsf  b freq bw bpf +] = midcrossovermix
+
+
+;; crossover tests:
+;; \[20 20 20k xline 0 sinosc .5 * = x x 632 crossover = lo = hi  [x lo hi + lo hi]] ! "crossover-test" >sf
+;; \[20 20 20k xline 0 sinosc .5 * = x x 632 crossover1 = lo = hi  [x lo hi + lo hi]] ! "crossover1-test" >sf
+;; \[20 20 20k xline 0 sinosc .5 * = x x 632 .5 midcrossover = mid = outer  [x mid outer + mid outer]] ! "midcrossover-test" >sf
+
+"\\n*** delays with wet/dry mix ***" helpLine
+
+\in delay maxdelay decay wet
+	"(in delay maxdelay decay wet --> out) combn delay with wet/dry mix control."
+	[in  in delay maxdelay decay combn wet fade2] = combnw 
+	
+\in delay maxdelay decay wet
+	"(in delay maxdelay decay wet --> out) combl delay with wet/dry mix control."
+	[in  in delay maxdelay decay combl wet fade2] = comblw 
+	
+\in delay maxdelay decay wet
+	"(in delay maxdelay decay wet --> out) combc delay with wet/dry mix control."
+	[in  in delay maxdelay decay combc wet fade2] = combcw
+	
+
+"\\n*** complex <-> polar ***" helpLine
+
+\x y
+	"(x y --> rho theta) complex to polar"
+	[x y hypot y x atan2] = xp
+
+\r t
+	"(rho theta --> x y) polar to complex"
+	[r t cos * r t sin *] = px
+
+"\\n*** zero padding ***" helpLine
+	
+\a n
+	"(a n --> out) zero pad after. add n zeroes after list a."
+	[a n 0z $z] = padz
+
+\a n
+	"(a n --> out) zero pad before. add n zeroes before list a."
+	[n 0z a $z] = zpad
+
+\a n
+	"(a n --> out) zero pad before and after. add n zeroes before and after list a."
+	[n 0z a aba $z $z] = zpadz
+
+\a
+	"(a --> b) next power of two greater than or equal to a."
+	[a log2 ceil exp2] = nextPow2
+
+\a n
+	"(a n --> out) add enough zeroes after list a to make the total size equal to n."
+	[a (n a size -) padz] = padzto
+
+\a t
+	"(a t --> out) delay signal a by t seconds."
+	[t mum a $z] = dly
+
+\a	
+	"(a --> b) reduce the length of a stream or signal by half."
+	[a a size /2 N] = N/2
+
+
+"\\n*** dsp functions ***" helpLine
+
+\re 
+	"(re -- > re im) real fft"
+	[re re size 0z fft] = rfft
+
+;; sinc function
+\n nz
+	"(n nz --> out) return a sinc (sin(x)/x) wave of size n containing nz zero crossings."
+	[ n nz pi * aa neg lindivz sinc] = sincfill
+
+;; kaiser windowed sinc
+\n nz db
+	"(n nz stopBandAttenuation --> out) return a kaiser windowed sinc (win(x)*sin(x)/x) wave of size n containing nz zero crossings."
+	[n nz sincfill  n db kaiser *] = kaisersinc
+
+\x
+	"(samples --> seconds) convert from samples to seconds."
+	[x isr *] = sr/
+
+\x
+	"(seconds --> samples) convert from seconds to samples."
+	[x sr *] = sr*
+
+\a	
+	"(signal --> duration) return the duration of a finite signal."
+	[a size isr *] = duration
+
+
+
+"\\n*** normalization ***" helpLine
+
+\x
+	"(in --> out) scale a list so that the peak absolute value is 1."
+	[x abs |/ 1/ x *] = normalize
+
+\x
+	"(in --> out) normalize a list of lists with respect to the maximum absolute peak of all of them."
+	[x abs @ |/ |/ 1/ x *] = conormalize
+	
+\x y
+	"(in --> out) normalize to y a list of lists with respect to the maximum absolute peak of all of them."
+	[x abs @ |/ |/ 1/ y * x *] = conormalizeb
+
+\x
+	"(in --> out) scale a list so that its sum is 1."
+	[x x +/ /] = sumto1
+
+\x y
+ 	"(x y --> out) scale the list x so that its sum is y."
+	[x x +/ / y *] = sumto
+
+\x y
+ 	"(x y --> out) scale the list x so that the sum of the absolute values is y."
+	[x x abs +/ / y *] = absumto
+
+\x y
+ 	"(x y --> out) cut the list x so that its sum is y. e.g.  nat pi sumcut ==> [0 1 2 .14159]"
+	[x x +\ y < keepWhile inf N = b   b y b +/ - add ] = sumcut
+
+;;;;;;;
+
+;; a function for checking the fit of an edo tuning.
+\et [16 36 to aa log2 frac aa 1200 * ba et * 1 round aa et / 1200 * bac aba - 4ple flop prall] = predo  
+;;\et [16 36 to aa log2 frac aa 1000 * ba et * 1 round aa et / 1000 * bac aba - 4ple flop prall] = predo  
+
+\x n 
+	"(x n --> q) take a ratio and quantize it to n edo."
+	[x log2 n 1/ round 2^] = qedo 
+
+\x 
+	"(x --> q) take a ratio and quantize it to 12 edo."
+	[x log2 1/12 round 2^] = q12 
+
+\x 
+	"(x --> q) take a ratio and quantize it to 72 edo."
+	[x log2 1/72 round 2^] = q72 
+
+\x d
+	"(x d --> out) add random deviations of amplitude d."
+	[x d rand2s +] = dv
+
+\x d
+ 	"(x d --> out) add deviations of amplitude d in log2 space."
+	[x log2 d rand2s + 2^] = ldv
+
+;;;;;;;
+
+"\\n*** 12 tone pitch set operations ***" helpLine
+
+\x 
+	"(x --> y) pitch set normalization."
+	[x x 1st - 12 %] = ps-norm
+
+\x 
+	"(x --> y) pitch set mirror inversion."
+	[x reverse ps-norm] = ps-inv
+
+\x i
+	"(x --> y) return a normalized rotation of a pitch set x."
+	[ x i rot ps-norm] = ps-rot
+
+\x 
+	"(x --> y) return a list of all normalized rotations of a pitch set x."
+	[ x 0 x size -- to @ ps-rot] = ps-rots
+	
+;;;;;;;
+
+"\\n*** pitch operations ***" helpLine
+
+\x
+	"(x --> y) mirror inversion. [1 5 4 3] --> [5 1 2 3]"
+	[x |/ x &/ + x -] = invert
+
+\x v 
+	"(x v --> y) replace the head of list x with v."
+	[x 1 N> v cons] = replacehead
+
+\x m
+	"(x m --> y) adds multiples of m to elements of x in order to create a monotonic ascending sequence."
+	[x <^ 0 replacehead +\ m * x +] = monotonic
+
+
+;;;;;;;
+
+"\\n*** rhythm ***" helpLine
+
+\n p
+	"(n p --> durs) randomly subdivide a total duration of n beats into p durations. n and p must be integers."
+	[1 n -- to muss p -- N sort n add -^] = rdiv
+
+;;;;;;;
+
+"\\n*** list co-length operations ***" helpLine
+
+;; unfortunately the following don't work on indefinite lists that are actually finite. 
+;; so these are candidates to be replaced with a built-in.
+
+\x
+	"(x --> y) make all lists in list x as short as the shortest list"
+	[
+		x @ finite |/ 
+		\[ x @ cyc @ x @ size &/ N]
+		\[ x ] if
+	] = shortest
+
+\x
+	"(x --> y) make all lists in list x as long as the longest list via hang"
+	[
+		x @ finite &/ 
+		\[ x @ hang @ x @ size |/ N]
+		\[ x @ hang ] if
+	] = longest
+
+\x
+	"(x --> y) make all lists in list x as long as the longest list via cyc"
+	[
+		x @ finite &/ 
+		\[ x @ cyc @ x @ size |/ N]
+		\[ x @ cyc ] if
+	] = cycLongest
+
+\x
+	"(x --> y) make all lists in list x as long as the least common multiple of their lengths."
+	[
+		x @ finite &/ 
+		\[ x @ cyc @ x @ size lcm/ N]
+		\[ x @ cyc ] if
+	] = cyclcm
+
+\x
+	"(x --> y) return a mirrored cycle. i.e. [1 2 3 4] --> [1 2 3 4 3 2 1 2 3 4 3 2...]"
+	[ x mirror0 cyc ] = mircyc
+
+
+\x
+	"(x --> y) make all lists in list x as long as the longest list via mircyc"
+	[
+		x @ finite &/ 
+		\[ x @ mircyc @ x @ size |/ N]
+		\[ x ] if
+	] = mirLongest
+
+
+;;;;;;;
+;; scales
+
+[1/1 9/8 5/4 4/3 3/2 5/3 15/8 2/1] = ji-major
+[1/1 9/8 6/5 4/3 3/2 8/5 9/5 2/1] = ji-minor
+[1/1 9/8 81/64 4/3 3/2 27/16 243/128] = ji-pyth
+
+;; chords
+
+[1/1 5/4 3/2 7/4] = d7
+
+[1/1 5/4 3/2 15/8] = M7
+[1/1 11/9 3/2 11/6] = n7
+[1/1 6/5 3/2 9/5] = m7
+[1/1 7/6 3/2 7/4] = sm7
+[1/1 4/3 3/2 16/9] = sus7
+
+[1/1 5/4 7/5 7/4] = d7b5
+[1/1 5/4 25/16 15/8] = M7s5
+[1/1 6/5 7/5 17/10] = dim7h
+[1/1 6/5 7/5 42/25] = dim7p
+[15/8 9/8 4/3 8/5] = dim7
+[1/1 6/5 7/5 9/5] = m7b5
+
+[1/1 6/5 3/2 15/8] = mM7
+[1/1 9/7 3/2 27/14] = sM7
+[1/1 5/4 3/2 5/3] = M6
+[1/1 6/5 3/2 5/3] = m6
+[1/1 6/5 3/2 17/10] = m6h
+
+[1/1 9/8 3/2 27/16] = sus69py
+[1/1 8/7 3/2 12/7] = ssus69
+[1/1 10/9 3/2 5/3] = sus69
+[1/1 4/3 3/2 16/9 9/4] = sus9
+
+[1/1 10/9 7/5 14/9] = par1
+[1/1 5/4 7/4 35/16] = par2
+
+[1/1 5/4 7/5 7/4 21/10] = d7b5b9
+[1/1 5/4 7/5 7/4 7/3] = d7b5s9
+[1/1 5/4 3/2 7/4 17/8] = d7b9h
+[1/1 5/4 3/2 7/4 21/10] = d7b9
+[1/1 5/4 3/2 7/4 9/4] = d9
+[1/1 5/4 3/2 7/4 19/8] = d7s9h
+[1/1 5/4 3/2 7/4 7/3] = d7s9
+[1/1 5/4 25/16 7/4 17/8] = d7s5b9h
+[1/1 5/4 25/16 7/4 9/4] = d9s5
+[1/1 5/4 25/16 7/4 19/8] = d7s5s9h
+[1/1 5/4 25/16 7/4 7/3] = d7s5s9
+
+[1/1 9/8 81/64 729/512 3/2 27/32 243/128] = pythlydian
+[1/1 9/8 5/4 45/32 3/2 5/3 15/8] = lydian
+[1/1 9/8 5/4 45/32 3/2 27/16 15/8] = lydian27
+
+
+"\\n*** synths ***" helpLine
+
+\pch dyn dur pan 
+	"(pch dyn dur pan -> outs) saw->filter->amp synth voice"
+[
+	#[0 1 .3 0] -3 #[3m .1 dur .103 - .1 |] 1 curves = env
+	dyn 0 1h 6h 12k linlinc env * = fc
+	dyn 0 1h -20 -10 linlinc dbamp = amp
+	pch 1/12 * ohz [.1 -.1] + 0 [1 1] rand saw fc lpf2 env amp * * 
+] = blah
+
+\pch dyn dur pan 
+	"(pch dyn dur pan -> outs) lfsaw->filter->amp synth voice"
+[
+	#[0 1 .3 0] -3 #[3m .1 dur .103 - .1 |] 1 curves = env
+	
+	dyn 0 1h 6h 12k linlinc env * = fc
+	dyn 0 1h -20 -10 linlinc dbamp = amp
+	pch 1/12 * ohz [.1 -.1] + 0 [1 1] rand lfsaw fc lpf2 env amp * * 
+] = lfblah
+
+;; [-12 0 4 6 10 14 20] 2 - @ 70 12 0 blah 0 .3 by dly +/ play
+
+;; meanings of arguments:
+;; freq - frequency in hertz
+;; duty - duty cycle for variable width pulse or saw
+;; db - peak amplitude in decibels
+;; dur - duration in seconds
+;; pan - pan position (-1 to +1)
+;; harms - number of harmonics. determines the filter cutoff frequency
+;; rq - the filter resonance, expressed as 1/Q.
+;; adsr - an array containing [attack-time decay-time sustain-level release-time
+;; c - carrier frequency multiplier
+;; m - modulator frequency multiplier
+;; mx - index of frequency modulation in cycles
+;; fb - amount of phase modulation self feedback for the modulator
+;; wt - wavetable
+
+
+\adsr dur
+[
+	adsr un4 = r = s = d = a
+	#[0 1 s s 0] -3 #[a d dur a - d - 0 | r] 1 curves	
+] = adsrenv
+
+\freq db dur pan harms adsr
+	"(freq db dur pan harms adsr --> out) sawtooth wave synth"
+[
+	adsr dur adsrenv = env
+	freq harms * freqLimit & env * = fc
+	db dbamp env * = amp
+	freq 0 saw fc lpf2 amp * pan pan2
+] = saw-syn
+
+\freq db dur pan harms adsr
+	"(freq db dur pan harms adsr --> out) square wave synth"
+[
+	adsr dur adsrenv = env
+	freq harms * freqLimit & env * = fc
+	db dbamp env * = amp
+	freq 0 .5 pulse fc lpf2 amp * pan pan2
+] = square-syn
+
+\freq duty db dur pan harms adsr
+	"(freq duty db dur pan harms adsr --> out) variable width pulse wave synth"
+[
+	adsr dur adsrenv = env
+	freq harms * freqLimit & env * = fc
+	db dbamp env * = amp
+	freq 0 duty pulse fc lpf2 amp * pan pan2
+] = pulse-syn
+
+\freq db dur pan harms adsr wt
+	"(freq db dur pan harms adsr wt --> out) wavetable oscillator synth"
+[
+	adsr dur adsrenv = env
+	freq harms * freqLimit & env * = fc
+	db dbamp env * = amp
+	freq 0 wt osc fc lpf2 amp * pan pan2
+] = osc-syn
+
+
+\freq db dur pan harms rq adsr
+	"(freq db dur pan harms rq adsr --> out) sawtooth wave synth with resonant lpf"
+[
+	adsr dur adsrenv = env
+	freq harms * freqLimit & env * = fc
+	db dbamp env * = amp
+	freq 0 saw fc rq rlpf2 amp * pan pan2
+] = saw-rsyn
+
+\freq db dur pan harms rq adsr
+	"(freq db dur pan harms rq adsr --> out) square wave synth with resonant lpf"
+[
+	adsr dur adsrenv = env
+	freq harms * freqLimit & env * = fc
+	db dbamp env * = amp
+	freq 0 .5 pulse fc rq rlpf2 amp * pan pan2
+] = square-rsyn
+
+\freq c m mx fb db dur pan adsr
+	"(freq c m mx fb db dur pan adsr --> out) fm synth"
+[
+	adsr dur adsrenv = env
+	db dbamp env * = amp
+	freq c * = cf
+	freq m * = mf
+	cf (mf 0 fb sinoscfb env mx * *) sinosc amp * pan pan2
+] = fm-syn
+
+\freq c m mx fb db dur pan adsr
+	"(freq c m mx fb db dur pan adsr --> out) 3 detuned carrier, 1 modulator fm"
+[
+	adsr dur adsrenv = env
+	db dbamp env * = amp
+	freq c * = cf
+	freq m * = mf
+	mf 0 fb sinoscfb env mx * * = mod
+	cf mod sinosc cf .2 + mod sinosc cf .2 - mod sinosc + + amp * pan pan2
+] = fm-syn3
+
+;;;;;;;
+"\\n*** events ***" helpLine
+	
+{
+	;; base event. contains common default arguments for instruments. 
+	;; a particular instrument will use only some of the arguments.
+	
+	:freq 	0 ohz 	; frequency in Hertz
+	:duty	.5		; duty cycle. 0 to 1 cycles
+	:phase	0		; phase. 0 to 1 cycles
+	
+	;; timing
+	:dur	1		; beats
+	:dt		\o[ o.dur ]		; delta time to next event in beats. default is to return the duration
+	:sus	\o[ o.dur o.legato * o.susmin | ]	; the time to sustain a note, in beats.
+	:legato	1		; proportion of the note duration to sustain a note.
+	:susmin	0		; minimum time to sustain a note, in beats.
+	
+	:pan	0		; -1 to 1
+	:harms	8		; number of harmonics. determines the filter cutoff frequency
+	:rq		.25		; 1/Q
+	:c		1		; carrier frequency multiplier.
+	:m		1		; modulator frequency multiplier.
+	:mx		1		; modulation index in radians.
+	:fb		0		; amplitude of feedback modulation.
+	:wt		sawTbl	; wave table.
+	
+	;; amplitude envelope
+	:db		-20		; decibels
+	:amp	\o[ o.db dbamp ]	; amplitude
+	:adsr	[2m 2 0 .1]	; an array containing [attack-time decay-time sustain-level release-time]
+	:env	\o[ o.adsr o.amp o.sus 1 adsr ]	; creates an adsr envelope
+	
+	:out	\o[ o `osc-syn !e ]	; extracts the event fields and passes them to osc-syn
+} = ev-base
+
+"ev-base - a form containing the basic low level information for a music event." helpLine
+
+; a simple sound for testing
+{
+        :freq   1k      ; hz
+        :db     -12     ; dB
+        :dur    1       ; beats
+        :hop    \o[o.dur]
+        :out    \o[ (o.freq 0 sinosc) (#[0 1 0] o.db dbamp * -4 #[1m .4] 1 curves) * ]
+} = tink
+
+; { tink :freq 2h 1k xrands @ :dt [.1 .2] picks @ } 1 1 1 ola play
+
+; event list operations
+
+\in 
+	"(inEvents --> dur) return the duration of inEvents."
+	[in.dt +/ ] 	= ev-dur
+
+\in
+	"(inEvents --> startTimes) return a stream of start times for inEvents"
+	[ in.dt 1 shift +\ ] = ev-starts
+
+\in 
+	"(inEvents --> endTime) return the maximum end time of inEvents."
+	[in ev-starts in.dur + |/ ] 	= ev-end
+
+\in
+	"(inEvents --> outEvents) reverse an event list."
+	; create an array of reversed start times and then differentiate them.
+	[ {in reverse @ :dt (in ev-dur) (in ev-starts reverse) - -^ @} ] = ev-reverse
+
