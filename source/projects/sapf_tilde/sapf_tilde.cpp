@@ -282,6 +282,20 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
             // generation)
             x->audioThread = new Thread();
 
+            // Load prelude file from its known location in the project
+            const char* preludePath = "../../../../source/projects/sapf_lib/sapf-prelude.txt";
+            try {
+                post("sapf~: Loading prelude file: %s", preludePath);
+                loadFile(*x->sapfThread, preludePath);
+                post("sapf~: Prelude loaded successfully");
+            } catch (const std::exception& e) {
+                post("sapf~: Warning - Error loading prelude from %s: %s", preludePath, e.what());
+                post("sapf~: Continuing without prelude (some functions may not be available)");
+            } catch (...) {
+                post("sapf~: Warning - Unknown error loading prelude from %s", preludePath);
+                post("sapf~: Continuing without prelude (some functions may not be available)");
+            }
+
             // Initialize compiled function storage
             x->compiledFunction = P<Fun>(); // Initialize empty smart pointer
             x->lastSapfCode = nullptr;      // No cached code yet
