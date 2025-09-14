@@ -7,7 +7,7 @@
 
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
-#define sapf_debug(func_name) error("SAPF %s[%d]: %s", __FILENAME__, __LINE__, func_name)
+#define sapf_debug(func_name) post("SAPF %s[%d]: %s", __FILENAME__, __LINE__, func_name)
 
 #endif
 
