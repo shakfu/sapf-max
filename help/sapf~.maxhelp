@@ -52,7 +52,7 @@
                     "numoutlets": 1,
                     "outlettype": [ "" ],
                     "patching_rect": [ 213.0, 571.5, 230.0, 22.0 ],
-                    "text": "value 1."
+                    "text": "value 6."
                 }
             },
             {
@@ -203,7 +203,7 @@
                     "numinlets": 1,
                     "numoutlets": 3,
                     "outlettype": [ "signal", "signal", "" ],
-                    "patching_rect": [ 45.0, 506.0, 61.0, 22.0 ],
+                    "patching_rect": [ 41.0, 510.0, 61.0, 22.0 ],
                     "text": "sapf~"
                 }
             }
@@ -308,6 +308,14 @@
         ],
         "parameters": {
             "obj-10": [ "live.gain~", "Gain", 0 ],
+            "parameterbanks": {
+                "0": {
+                    "index": 0,
+                    "name": "",
+                    "parameters": [ "-", "-", "-", "-", "-", "-", "-", "-" ],
+                    "buttons": [ "-", "-", "-", "-", "-", "-", "-", "-" ]
+                }
+            },
             "inherited_shortname": 1
         },
         "autosave": 0

@@ -217,6 +217,45 @@ void sapf_anything(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         return;
     }
 
+    if(s && s != gensym("")) {
+        post("symbol: %s", s->s_name);
+    } else {
+        post("nosymbol");
+    }
+
+    // Dispatch to special commands if selector matches
+    // if (s) {
+    //     if (s == gensym("status")) {
+    //         sapf_status(x);
+    //         return;
+    //     } else if (s == gensym("help")) {
+    //         sapf_help(x);
+    //         return;
+    //     } else if (s == gensym("stack")) {
+    //         sapf_stack(x);
+    //         return;
+    //     } else if (s == gensym("clear")) {
+    //         sapf_clear(x);
+    //         return;
+    //     } 
+    // }
+
+    // if (s && s->s_name) {
+    //     if (strcmp(s->s_name, "status") == 0) {
+    //         sapf_status(x);
+    //         return;
+    //     } else if (strcmp(s->s_name, "help") == 0) {
+    //         sapf_help(x);
+    //         return;
+    //     } else if (strcmp(s->s_name, "stack") == 0) {
+    //         sapf_stack(x);
+    //         return;
+    //     } else if (strcmp(s->s_name, "clear") == 0) {
+    //         sapf_clear(x);
+    //         return;
+    //     }
+    // }
+
     // Construct code string from selector symbol and Max message atoms
     char codeBuffer[CODE_BUFFER_SIZE];
     codeBuffer[0] = '\0';
