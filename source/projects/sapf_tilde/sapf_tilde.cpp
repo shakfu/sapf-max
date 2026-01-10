@@ -134,13 +134,13 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
             x->numOutputChannels = std::max(1L, std::min(8L, atom_getlong(argv)));
         }
 
+        // General (non-audio) outlet for text output
+        x->text_outlet = outlet_new((t_object*)x, NULL);
+
         // Create audio outlets
         for (int i = 0; i < x->numOutputChannels; i++) {
             outlet_new(x, "signal");
         }
-
-        // General (non-audio) outlet for text output
-        x->text_outlet = outlet_new((t_object*)x, NULL);
 
         try {
             // Initialize SAPF engine (only once globally)

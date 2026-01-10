@@ -29,7 +29,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 249.0, 515.0, 29.5, 22.0 ],
+                    "patching_rect": [ 213.0, 524.0, 29.5, 22.0 ],
                     "text": "set"
                 }
             },
@@ -51,7 +51,7 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 249.0, 559.0, 230.0, 22.0 ],
+                    "patching_rect": [ 213.0, 571.5, 230.0, 22.0 ],
                     "text": "value 1."
                 }
             },
@@ -128,7 +128,7 @@
                     "maxclass": "ezdac~",
                     "numinlets": 2,
                     "numoutlets": 0,
-                    "patching_rect": [ 70.0, 628.0, 45.0, 45.0 ]
+                    "patching_rect": [ 41.0, 622.0, 45.0, 45.0 ]
                 }
             },
             {
@@ -144,7 +144,7 @@
                     "orientation": 1,
                     "outlettype": [ "signal", "signal", "", "float", "list" ],
                     "parameter_enable": 1,
-                    "patching_rect": [ 70.0, 559.0, 147.0, 47.0 ],
+                    "patching_rect": [ 41.0, 559.0, 147.0, 47.0 ],
                     "prototypename": "M4L.live.gain~.H.extended",
                     "saved_attribute_attributes": {
                         "valueof": {
@@ -203,7 +203,7 @@
                     "maxclass": "newobj",
                     "numinlets": 1,
                     "numoutlets": 3,
-                    "outlettype": [ "", "signal", "signal" ],
+                    "outlettype": [ "signal", "signal", "" ],
                     "patching_rect": [ 45.0, 506.0, 61.0, 22.0 ],
                     "text": "sapf~"
                 }
@@ -213,19 +213,19 @@
             {
                 "patchline": {
                     "destination": [ "obj-10", 1 ],
-                    "source": [ "obj-1", 2 ]
-                }
-            },
-            {
-                "patchline": {
-                    "destination": [ "obj-10", 0 ],
                     "source": [ "obj-1", 1 ]
                 }
             },
             {
                 "patchline": {
-                    "destination": [ "obj-13", 1 ],
+                    "destination": [ "obj-10", 0 ],
                     "source": [ "obj-1", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-13", 1 ],
+                    "source": [ "obj-1", 2 ]
                 }
             },
             {
@@ -309,6 +309,14 @@
         ],
         "parameters": {
             "obj-10": [ "live.gain~", "Gain", 0 ],
+            "parameterbanks": {
+                "0": {
+                    "index": 0,
+                    "name": "",
+                    "parameters": [ "-", "-", "-", "-", "-", "-", "-", "-" ],
+                    "buttons": [ "-", "-", "-", "-", "-", "-", "-", "-" ]
+                }
+            },
             "inherited_shortname": 1
         },
         "autosave": 0
