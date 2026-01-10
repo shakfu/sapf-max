@@ -51,7 +51,8 @@ void sapf_assist(t_sapf* x, void* b, long m, long a, char* s);
 void sapf_dsp64(t_sapf* x, t_object* dsp64, short* count, double samplerate, long maxvectorsize, long flags);
 void sapf_perform64(t_sapf* x, t_object* dsp64, double** ins, long numins, double** outs, long numouts,
                     long sampleframes, long flags, void* userparam);
-void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv);
+void sapf_anything(t_sapf* x, t_symbol* s, long argc, t_atom* argv);
+void sapf_list(t_sapf* x, t_symbol* s, long argc, t_atom* argv);
 void sapf_status(t_sapf* x);
 void sapf_help(t_sapf* x);
 void sapf_stack(t_sapf* x);
@@ -108,7 +109,8 @@ void ext_main(void* r)
 
     class_addmethod(c, (method)sapf_dsp64, "dsp64", A_CANT, 0);
     class_addmethod(c, (method)sapf_assist, "assist", A_CANT, 0);
-    class_addmethod(c, (method)sapf_code, "code", A_GIMME, 0);
+    class_addmethod(c, (method)sapf_anything, "anything", A_GIMME, 0);
+    class_addmethod(c, (method)sapf_list, "list", A_GIMME, 0);
     class_addmethod(c, (method)sapf_status, "status", 0);
     class_addmethod(c, (method)sapf_help, "help", 0);
     class_addmethod(c, (method)sapf_stack, "stack", 0);
@@ -208,23 +210,30 @@ void sapf_free(t_sapf* x)
     post("sapf~: Cleanup complete");
 }
 
-void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
+void sapf_anything(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
 {
     if (!x || !x->mainThread) {
         error("sapf~: Object not properly initialized");
         return;
     }
 
-    if (argc == 0) {
-        error("sapf~: No code provided");
-        return;
-    }
-
-    // Construct code string from Max message atoms
+    // Construct code string from selector symbol and Max message atoms
     char codeBuffer[CODE_BUFFER_SIZE];
     codeBuffer[0] = '\0';
     size_t bufferUsed = 0;
 
+    // Start with the selector symbol (first word of the message)
+    if (s && s->s_name) {
+        size_t symLen = strlen(s->s_name);
+        if (symLen >= sizeof(codeBuffer)) {
+            error("sapf~: Code string too long");
+            return;
+        }
+        strcpy(codeBuffer, s->s_name);
+        bufferUsed = symLen;
+    }
+
+    // Append remaining atoms
     for (long i = 0; i < argc; i++) {
         char atomStr[256];
 
@@ -250,17 +259,15 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         }
 
         size_t atomLen = strlen(atomStr);
-        size_t spaceNeeded = atomLen + (i > 0 ? 1 : 0) + 1;
+        size_t spaceNeeded = atomLen + 2;  // space + atom + null
 
         if (bufferUsed + spaceNeeded > sizeof(codeBuffer)) {
             error("sapf~: Code string too long");
             return;
         }
 
-        if (i > 0) {
-            strcat(codeBuffer, " ");
-            bufferUsed++;
-        }
+        strcat(codeBuffer, " ");
+        bufferUsed++;
         strcat(codeBuffer, atomStr);
         bufferUsed += atomLen;
     }
@@ -296,6 +303,13 @@ void sapf_code(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
     }
 }
 
+void sapf_list(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
+{
+    // List messages start with a number, so there's no selector symbol
+    // Pass nullptr as the symbol and forward all atoms to sapf_anything
+    sapf_anything(x, nullptr, argc, argv);
+}
+
 void sapf_status(t_sapf* x)
 {
     post("sapf~: === STATUS ===");
@@ -328,7 +342,7 @@ void sapf_status(t_sapf* x)
 void sapf_assist(t_sapf* x, void* b, long io, long idx, char* s)
 {
     if (io == ASSIST_INLET) {
-        snprintf(s, ASSIST_MAX_STRING_LEN, "signal input, code messages");
+        snprintf(s, ASSIST_MAX_STRING_LEN, "signal input, SAPF code messages");
     } else if (io == ASSIST_OUTLET) {
         if (idx < x->numOutputChannels) {
             snprintf(s, ASSIST_MAX_STRING_LEN, "signal output %ld", idx + 1);
@@ -418,8 +432,8 @@ void sapf_help(t_sapf* x)
     post("SAPF (Sound As Pure Form) is a functional, stack-based audio language");
     post("");
     post("Basic Usage:");
-    post("  Send 'code <expression>' messages to compile and execute SAPF code");
-    post("  Example: [code 440 0 sinosc 0.3 * play]");
+    post("  Send SAPF code directly as messages");
+    post("  Example: [440 0 sinosc 0.3 * play]");
     post("");
     post("Commands:");
     post("  status  - Show VM status");

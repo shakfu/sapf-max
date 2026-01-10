@@ -18,8 +18,8 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 287.0, 198.0, 69.0, 22.0 ],
-                    "text": "code 1 5 +"
+                    "patching_rect": [ 240.5, 389.0, 36.0, 22.0 ],
+                    "text": "1 5 +"
                 }
             },
             {
@@ -40,8 +40,8 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 180.0, 325.0, 61.0, 22.0 ],
-                    "text": "code stop"
+                    "patching_rect": [ 81.0, 467.0, 31.0, 22.0 ],
+                    "text": "stop"
                 }
             },
             {
@@ -58,13 +58,12 @@
             {
                 "box": {
                     "id": "obj-14",
-                    "linecount": 2,
                     "maxclass": "message",
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 180.0, 253.0, 458.0, 35.0 ],
-                    "text": "code ((.4 0 lfsaw) 2 * ([8 7.23] 0 lfsaw) 0.25 * 9.667 + + exp2) 0 sinosc 0.04 * 0.2 0 4 combn play"
+                    "patching_rect": [ 180.0, 253.0, 490.0, 22.0 ],
+                    "text": "((.4 0 lfsaw) 2 * ([8 7.23] 0 lfsaw) 0.25 * 9.667 + + exp2) 0 sinosc 0.04 * 0.2 0 4 combn play"
                 }
             },
             {
@@ -74,8 +73,8 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 180.0, 198.0, 93.0, 22.0 ],
-                    "text": "code 5 5 equals"
+                    "patching_rect": [ 166.5, 389.0, 64.0, 22.0 ],
+                    "text": "5 5 equals"
                 }
             },
             {
@@ -85,8 +84,8 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 180.0, 129.0, 200.0, 22.0 ],
-                    "text": "code 440 0 sinosc play"
+                    "patching_rect": [ 180.0, 129.0, 101.0, 22.0 ],
+                    "text": "440 0 sinosc play"
                 }
             },
             {
@@ -118,8 +117,8 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 97.0, 70.0, 442.0, 22.0 ],
-                    "text": "code (([.4 [8 7.23]] 0 lfsaw) [24 3] * +/ 81 + nnhz) 0 sinosc 4c * 0.2 0 4 combn play"
+                    "patching_rect": [ 97.0, 70.0, 413.0, 22.0 ],
+                    "text": "(([.4 [8 7.23]] 0 lfsaw) [24 3] * +/ 81 + nnhz) 0 sinosc 4c * 0.2 0 4 combn play"
                 }
             },
             {
@@ -181,8 +180,8 @@
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 156.0, 101.0, 159.0, 22.0 ],
-                    "text": "code 800 0 sinosc 0.3 * play"
+                    "patching_rect": [ 156.0, 101.0, 129.0, 22.0 ],
+                    "text": "800 0 sinosc 0.3 * play"
                 }
             },
             {
@@ -309,14 +308,6 @@
         ],
         "parameters": {
             "obj-10": [ "live.gain~", "Gain", 0 ],
-            "parameterbanks": {
-                "0": {
-                    "index": 0,
-                    "name": "",
-                    "parameters": [ "-", "-", "-", "-", "-", "-", "-", "-" ],
-                    "buttons": [ "-", "-", "-", "-", "-", "-", "-", "-" ]
-                }
-            },
             "inherited_shortname": 1
         },
         "autosave": 0
