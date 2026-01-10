@@ -13,6 +13,65 @@
         "boxes": [
             {
                 "box": {
+                    "data": {
+                        "clips": [
+                            {
+                                "absolutepath": "duduk.aif",
+                                "filename": "duduk.aif",
+                                "filekind": "audiofile",
+                                "id": "u836001847",
+                                "loop": 0,
+                                "content_state": {                                }
+                            }
+                        ]
+                    },
+                    "id": "obj-21",
+                    "maxclass": "playlist~",
+                    "mode": "basic",
+                    "numinlets": 1,
+                    "numoutlets": 5,
+                    "outlettype": [ "signal", "signal", "signal", "", "dictionary" ],
+                    "parameter_enable": 0,
+                    "patching_rect": [ 167.0, 307.0, 150.0, 30.0 ],
+                    "quality": "basic",
+                    "saved_attribute_attributes": {
+                        "candicane2": {
+                            "expression": ""
+                        },
+                        "candicane3": {
+                            "expression": ""
+                        },
+                        "candicane4": {
+                            "expression": ""
+                        },
+                        "candicane5": {
+                            "expression": ""
+                        },
+                        "candicane6": {
+                            "expression": ""
+                        },
+                        "candicane7": {
+                            "expression": ""
+                        },
+                        "candicane8": {
+                            "expression": ""
+                        }
+                    }
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-18",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 167.0, 348.0, 63.0, 22.0 ],
+                    "text": "0 adc play"
+                }
+            },
+            {
+                "box": {
                     "id": "obj-19",
                     "maxclass": "message",
                     "numinlets": 2,
@@ -211,7 +270,7 @@
                 "box": {
                     "id": "obj-1",
                     "maxclass": "newobj",
-                    "numinlets": 1,
+                    "numinlets": 2,
                     "numoutlets": 3,
                     "outlettype": [ "signal", "signal", "" ],
                     "patching_rect": [ 41.0, 510.0, 61.0, 22.0 ],
@@ -277,6 +336,12 @@
             {
                 "patchline": {
                     "destination": [ "obj-1", 0 ],
+                    "source": [ "obj-18", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-1", 0 ],
                     "source": [ "obj-19", 0 ]
                 }
             },
@@ -284,6 +349,12 @@
                 "patchline": {
                     "destination": [ "obj-1", 0 ],
                     "source": [ "obj-2", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-1", 0 ],
+                    "source": [ "obj-21", 0 ]
                 }
             },
             {

@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cstring>
 #include <vector>
+#include <pthread.h>
 
 #define CODE_BUFFER_SIZE 4096
 
@@ -29,10 +30,17 @@ typedef struct _sapf {
     // Sapf execution context
     Thread* mainThread;
 
+    // Thread synchronization
+    pthread_mutex_t threadMutex;
+
     // Audio output buffers (float* for MaxMSPProcessAudio)
     std::vector<float*> audioBuffers;
     long bufferSize;
     int numOutputChannels;
+
+    // Audio input buffers (float* converted from Max's double input)
+    std::vector<float*> inputBuffers;
+    int numInputChannels;
 
     // Sample rate tracking
     double currentSampleRate;
@@ -91,6 +99,9 @@ void initSapfEngine()
         // Install Max-specific audio backend
         InstallMaxMSPBackend();
 
+        // Register adc/adcn primitives for audio input
+        RegisterMaxAudioPrimitives();
+
         gSapfEngineInitialized = true;
         post("sapf~: SAPF engine initialized (version %s)", engine.versionString());
 
@@ -128,7 +139,7 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
 
     if (x) {
         // MSP inlets: arg is # of inlets and is REQUIRED!
-        dsp_setup((t_pxobject*)x, 1);
+        dsp_setup((t_pxobject*)x, 2);
 
         // Parse arguments for number of output channels (default 2)
         x->numOutputChannels = 2;
@@ -143,6 +154,12 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
         for (int i = 0; i < x->numOutputChannels; i++) {
             outlet_new(x, "signal");
         }
+
+        // Initialize mutex for thread safety
+        pthread_mutex_init(&x->threadMutex, nullptr);
+
+        // Initialize input channel count (1 inlet)
+        x->numInputChannels = 2;
 
         try {
             // Initialize SAPF engine (only once globally)
@@ -164,6 +181,7 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
 
             // Initialize audio buffers
             x->audioBuffers.clear();
+            x->inputBuffers.clear();
             x->bufferSize = 0;
 
             // Initialize sample rate
@@ -193,16 +211,27 @@ void sapf_free(t_sapf* x)
     post("sapf~: Cleaning up...");
 
     // Clean up main thread
+    pthread_mutex_lock(&x->threadMutex);
     if (x->mainThread) {
         delete x->mainThread;
         x->mainThread = nullptr;
     }
+    pthread_mutex_unlock(&x->threadMutex);
 
-    // Clean up audio buffers
+    // Clean up audio output buffers
     for (float* buf : x->audioBuffers) {
         delete[] buf;
     }
     x->audioBuffers.clear();
+
+    // Clean up audio input buffers
+    for (float* buf : x->inputBuffers) {
+        delete[] buf;
+    }
+    x->inputBuffers.clear();
+
+    // Destroy mutex
+    pthread_mutex_destroy(&x->threadMutex);
 
     // Must call dsp_free
     dsp_free((t_pxobject*)x);
@@ -274,6 +303,9 @@ void sapf_anything(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
 
     post("sapf~: Compiling: %s", codeBuffer);
 
+    // Lock mutex for thread-safe access to mainThread
+    pthread_mutex_lock(&x->threadMutex);
+
     try {
         // Compile the code
         P<Fun> compiledFunction;
@@ -294,11 +326,15 @@ void sapf_anything(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
             error("sapf~: Compilation failed for: %s", codeBuffer);
         }
 
+        pthread_mutex_unlock(&x->threadMutex);
+
     } catch (const std::exception& e) {
+        pthread_mutex_unlock(&x->threadMutex);
         error("sapf~: Error: %s", e.what());
         strncpy(x->errorMessage, e.what(), sizeof(x->errorMessage) - 1);
         x->errorMessage[sizeof(x->errorMessage) - 1] = '\0';
     } catch (...) {
+        pthread_mutex_unlock(&x->threadMutex);
         error("sapf~: Unknown error during execution");
     }
 }
@@ -370,18 +406,31 @@ void sapf_dsp64(t_sapf* x, t_object* dsp64, short* count, double samplerate, lon
 
     // Reallocate audio buffers if needed
     if (x->bufferSize != maxvectorsize) {
-        // Free old buffers
+        // Free old output buffers
         for (float* buf : x->audioBuffers) {
             delete[] buf;
         }
         x->audioBuffers.clear();
 
-        // Allocate new buffers
+        // Allocate new output buffers
         for (int i = 0; i < x->numOutputChannels; i++) {
             x->audioBuffers.push_back(new float[maxvectorsize]);
         }
+
+        // Free old input buffers
+        for (float* buf : x->inputBuffers) {
+            delete[] buf;
+        }
+        x->inputBuffers.clear();
+
+        // Allocate new input buffers
+        for (int i = 0; i < x->numInputChannels; i++) {
+            x->inputBuffers.push_back(new float[maxvectorsize]);
+        }
+
         x->bufferSize = maxvectorsize;
-        post("sapf~: Audio buffers allocated (%d channels x %ld samples)", x->numOutputChannels, maxvectorsize);
+        post("sapf~: Audio buffers allocated (%d in, %d out, %ld samples)",
+             x->numInputChannels, x->numOutputChannels, maxvectorsize);
     }
 
     object_method(dsp64, gensym("dsp_add64"), x, sapf_perform64, 0, NULL);
@@ -397,6 +446,19 @@ void sapf_perform64(t_sapf* x, t_object* dsp64, double** ins, long numins, doubl
         }
         return;
     }
+
+    // Convert input from Max's double format to float for SAPF
+    int numInputs = std::min((int)numins, (int)x->inputBuffers.size());
+    for (int ch = 0; ch < numInputs; ch++) {
+        double* src = ins[ch];
+        float* dst = x->inputBuffers[ch];
+        for (long i = 0; i < sampleframes; i++) {
+            dst[i] = (float)src[i];
+        }
+    }
+
+    // Pass input buffers to the SAPF backend for adc/adcn access
+    MaxMSPSetInputBuffers(x->inputBuffers.data(), numInputs, (int)sampleframes);
 
     // Get float* pointers for MaxMSPProcessAudio
     int numChannels = std::min((int)numouts, (int)x->audioBuffers.size());
