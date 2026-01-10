@@ -257,7 +257,7 @@ static bool parseBackquote(Thread& th, P<Code>& code)
 			code->add(opPushWorkspaceVar, vname);
 			break;
 		default :
-			post("backquote error: \"%s\" is an undefined word\n", name->s);
+			sapf_post("backquote error: \"%s\" is an undefined word\n", name->s);
 			syntaxError("undefined word");
 	}
 
@@ -447,7 +447,7 @@ static bool parseLambda(Thread& th, P<Code>& code)
 	
 	int c = th.getc();	
 	if (c != '[') {
-        post("got char '%c' %d\n", c, c);
+        sapf_post("got char '%c' %d\n", c, c);
 		syntaxError("expected open square bracket after argument list");
 	}
 		
@@ -472,7 +472,7 @@ static bool parseLambda(Thread& th, P<Code>& code)
 	}
 	if (args.size() > USHRT_MAX || cs->mLocals.size() > USHRT_MAX || cs->mVars.size() > USHRT_MAX)
 	{
-		post("Too many variables!\n");
+		sapf_post("Too many variables!\n");
 		throw errSyntax;
 	}
 
@@ -699,7 +699,7 @@ bool parseWord(Thread& th, P<Code>& code)
 				code->add(opCallWorkspaceVar, vname);
 				break;
 			default :
-				post("\"%s\" is an undefined word\n", name->cstr());
+				sapf_post("\"%s\" is an undefined word\n", name->cstr());
 				syntaxError("undefined word");
 				
 		}
@@ -767,7 +767,7 @@ bool parseElem(Thread& th, P<Code>& code)
 	if (c == 0)
 		return false;
 	if (c == ']' || c == ')' || c == '}') {
-		post("unexpected '%c'.\n", c);
+		sapf_post("unexpected '%c'.\n", c);
 		throw errSyntax;
 	}
 	if (c == '@')

@@ -51,9 +51,9 @@ void RCObj::norefs()
 	
 void RCObj::negrefcount()
 {
-	post("RELEASING WITH NEGATIVE REFCOUNT %s %p %d\n", TypeName(), this, refcount.load());
+	sapf_post("RELEASING WITH NEGATIVE REFCOUNT %s %p %d\n", TypeName(), this, refcount.load());
 }
 void RCObj::alreadyDead()
 {
-	post("RETAINING ALREADY DEAD OBJECT %s %p\n", TypeName(), this);
+	sapf_post("RETAINING ALREADY DEAD OBJECT %s %p\n", TypeName(), this);
 }

@@ -457,34 +457,34 @@ static void pr_(Thread& th, Prim* prim)
 {
 	std::string s;
 	th.pop().print(th, s);
-	post("%s", s.c_str());
+	sapf_post("%s", s.c_str());
 }
 
 static void prdebug_(Thread& th, Prim* prim)
 {
 	std::string s;
 	th.pop().printDebug(th, s);
-	post("%s", s.c_str());
+	sapf_post("%s", s.c_str());
 }
 
 static void cr_(Thread& th, Prim* prim)
 {
-	post("\n");
+	sapf_post("\n");
 }
 
 static void tab_(Thread& th, Prim* prim)
 {
-	post("\t");
+	sapf_post("\t");
 }
 
 static void sp_(Thread& th, Prim* prim)
 {
-	post(" ");
+	sapf_post(" ");
 }
 
 static void prstk_(Thread& th, Prim* prim)
 {
-	post("stack : "); th.printStack(); post("\n");
+	sapf_post("stack : "); th.printStack(); sapf_post("\n");
 }
 
 
@@ -811,7 +811,7 @@ static void pushWorkspace_(Thread& th, Prim* prim)
 static void popWorkspace_(Thread& th, Prim* prim)
 {
     if (!th.mWorkspace->mNextForm()) {
-        post("Must not pop top level workspace!\n");
+        sapf_post("Must not pop top level workspace!\n");
         return;
     }
 	th.mWorkspace = th.mWorkspace->mNextForm;
@@ -984,7 +984,7 @@ static void Y_(Thread& th, Prim* prim)
 {
 	V f = th.pop();
 	if (f.takes() < 1) {
-		post("Y : fun. function must take at least one argument.\n");
+		sapf_post("Y : fun. function must take at least one argument.\n");
 		throw errFailed;
 	}
 	th.push(new Prim(y_combinator_call_, f, f.takes()-1, f.leaves(), NULL, NULL));
@@ -1019,13 +1019,13 @@ static void sleep_(Thread& th, Prim* prim)
 #if COLLECT_MINFO
 static void minfo_(Thread& th, Prim* prim)
 {
-	post("signal generators %qd\n", vm.totalSignalGenerators.load());
-	post("stream generators %qd\n", vm.totalStreamGenerators.load());
-	post("objects live %qd\n", vm.totalObjectsAllocated.load() - vm.totalObjectsFreed.load());
-	post("objects allocated %qd\n", vm.totalObjectsAllocated.load());
-	post("objects freed %qd\n", vm.totalObjectsFreed.load());
-	post("retains %qd\n", vm.totalRetains.load());
-	post("releases %qd\n", vm.totalReleases.load());
+	sapf_post("signal generators %qd\n", vm.totalSignalGenerators.load());
+	sapf_post("stream generators %qd\n", vm.totalStreamGenerators.load());
+	sapf_post("objects live %qd\n", vm.totalObjectsAllocated.load() - vm.totalObjectsFreed.load());
+	sapf_post("objects allocated %qd\n", vm.totalObjectsAllocated.load());
+	sapf_post("objects freed %qd\n", vm.totalObjectsFreed.load());
+	sapf_post("retains %qd\n", vm.totalRetains.load());
+	sapf_post("releases %qd\n", vm.totalReleases.load());
 }
 #endif
 
@@ -1066,12 +1066,12 @@ static void listdump_(Thread& th, Prim* prim)
 {	
 	P<List> list = th.popList("listdump : seq");
 	
-	post("[\n");
+	sapf_post("[\n");
 	while (list()) {
-		post("list %p %p %d\n", list(), list->mArray(), list->mArray() ? (int)list->mArray->size() : -1);
+		sapf_post("list %p %p %d\n", list(), list->mArray(), list->mArray() ? (int)list->mArray->size() : -1);
 		list = list->next();
 	}
-	post("]\n");
+	sapf_post("]\n");
 }
 
 static void help_(Thread& th, Prim* prim)
@@ -1082,23 +1082,23 @@ static void help_(Thread& th, Prim* prim)
 	const char* help = v.OneLineHelp();
 	
 	if (mask) {
-		post("@%s ", mask);
+		sapf_post("@%s ", mask);
 	}
 	if (help) {
-		post("%s\n", help);
+		sapf_post("%s\n", help);
 	} else {
-		post("no help available.\n");
+		sapf_post("no help available.\n");
 	}
 
 }
 
 static void helpbifs_(Thread& th, Prim* prim)
 {
-    post("\nBUILT IN FUNCTIONS\n\n");
+    sapf_post("\nBUILT IN FUNCTIONS\n\n");
 
 	for (size_t i = 0; i < vm.bifHelp.size(); ++i) {
 		std::string& s = vm.bifHelp[i];
-		post(" %s\n", s.c_str());
+		sapf_post(" %s\n", s.c_str());
 	}
 }
 
@@ -1110,11 +1110,11 @@ static void helpLine_(Thread& th, Prim* prim)
 
 static void helpudfs_(Thread& th, Prim* prim)
 {
-    post("\nUSER DEFINED FUNCTIONS\n\n");
+    sapf_post("\nUSER DEFINED FUNCTIONS\n\n");
 
 	for (size_t i = 0; i < vm.udfHelp.size(); ++i) {
 		std::string& s = vm.udfHelp[i];
-		post(" %s\n", s.c_str());
+		sapf_post(" %s\n", s.c_str());
 	}
 }
 

@@ -188,7 +188,7 @@ public:
 	void getLine();
 	void logTimestamp(FILE* logfile);
 	void toToken(const char* s, int n) {
-		if (n >= kMaxTokenLen) { post("token too long.\n"); throw errSyntax; }
+		if (n >= kMaxTokenLen) { sapf_post("token too long.\n"); throw errSyntax; }
 		tokenLen = n;
 		memcpy(token, s, n);
 		token[tokenLen] = 0;

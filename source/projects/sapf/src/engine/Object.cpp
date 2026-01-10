@@ -22,7 +22,7 @@
 #include <algorithm>
 #include <cstdarg>
 
-void post(const char* fmt, ...)
+void sapf_post(const char* fmt, ...)
 {
     va_list vargs;
     va_start(vargs, fmt);
@@ -45,27 +45,27 @@ Thread gDummyThread;
 
 [[noreturn]] void notFound(Arg key)
 {
-	post("notFound ");
+	sapf_post("notFound ");
 	key.print(gDummyThread); // keys are either symbols or numbers neither of which will use the thread argument to print.
-	post("\n");
+	sapf_post("\n");
 	throw errNotFound;
 }
 
 [[noreturn]] void wrongType(const char* msg, const char* expected, Arg got)
 {
-	post("error: wrong type for  %s .  expected %s. got %s.\n", msg, expected, got.TypeName());
+	sapf_post("error: wrong type for  %s .  expected %s. got %s.\n", msg, expected, got.TypeName());
 	throw errWrongType;
 }
 
 [[noreturn]] void syntaxError(const char* msg)
 {
-	post("syntax error: %s\n", msg);
+	sapf_post("syntax error: %s\n", msg);
 	throw errSyntax;
 }
 
 [[noreturn]] void indefiniteOp(const char* msg1, const char* msg2)
 {
-	post("error: operation on indefinite object  %s%s\n", msg1, msg2);
+	sapf_post("error: operation on indefinite object  %s%s\n", msg1, msg2);
 	throw errIndefiniteOperation;
 }
 
@@ -215,7 +215,7 @@ public:
 void Fun::runREPL(Thread& th)
 {
 	if (th.stackDepth() < NumArgs()) {
-		post("expected %qd args on stack. Only have %qd\n", (int64_t)NumArgs(), (int64_t)th.stack.size());
+		sapf_post("expected %qd args on stack. Only have %qd\n", (int64_t)NumArgs(), (int64_t)th.stack.size());
 		throw errStackUnderflow;
 	}
 
@@ -241,7 +241,7 @@ void Fun::runREPL(Thread& th)
 void Fun::run(Thread& th)
 {	
 	if (th.stackDepth() < NumArgs()) {
-		post("expected %qd args on stack. Only have %qd\n", (int64_t)NumArgs(), (int64_t)th.stack.size());
+		sapf_post("expected %qd args on stack. Only have %qd\n", (int64_t)NumArgs(), (int64_t)th.stack.size());
 		throw errStackUnderflow;
 	}
 
@@ -375,7 +375,7 @@ V Form::mustGet(Thread& th, Arg key) const
 {
 	V value;
 	if (!get(th, key, value)) {
-		post("not found: ");
+		sapf_post("not found: ");
 		throw errNotFound; 
 	}
 	return value;
@@ -409,7 +409,7 @@ V GForm::mustGet(Thread& th, Arg key) const
 {
 	V value;
 	if (!get(th, key, value)) {
-		post("not found: ");
+		sapf_post("not found: ");
 		throw errNotFound; 
 	}
 	return value;
@@ -722,21 +722,21 @@ void Object::printDebug(Thread& th, int depth)
 { 
 	std::string s;
 	printDebug(th, s, depth);
-	post("%s", s.c_str());
+	sapf_post("%s", s.c_str());
 }
 
 void Object::print(Thread& th, int depth)
 { 
 	std::string s;
 	print(th, s, depth);
-	post("%s", s.c_str());
+	sapf_post("%s", s.c_str());
 }
 
 void Object::printShort(Thread& th, int depth)
 { 
 	std::string s;
 	printShort(th, s, depth);
-	post("%s", s.c_str());
+	sapf_post("%s", s.c_str());
 }
 
 void Object::print(Thread& th, std::string& out, int depth)
@@ -930,21 +930,21 @@ void V::print(Thread& th, int depth) const
 {
 	std::string s;
 	print(th, s, depth);
-	post("%s", s.c_str());
+	sapf_post("%s", s.c_str());
 }
 
 void V::printShort(Thread& th, int depth) const
 {
 	std::string s;
 	printShort(th, s, depth);
-	post("%s", s.c_str());
+	sapf_post("%s", s.c_str());
 }
 
 void V::printDebug(Thread& th, int depth) const
 {
 	std::string s;
 	printDebug(th, s, depth);
-	post("%s", s.c_str());
+	sapf_post("%s", s.c_str());
 }
 
 Gen::Gen(Thread& th, int inItemType, bool inFinite)

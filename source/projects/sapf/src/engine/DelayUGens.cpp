@@ -97,7 +97,7 @@ static void delayn_(Thread& th, Prim* prim)
 		if (delay.isReal()) {
 			maxdelay = delay.f;
 		} else {
-			post("delayn : maxdelay is zero and delay is a signal\n");
+			sapf_post("delayn : maxdelay is zero and delay is a signal\n");
 			throw errFailed;
 		}
 	}
@@ -197,7 +197,7 @@ static void delayl_(Thread& th, Prim* prim)
 		if (delay.isReal()) {
 			maxdelay = delay.f;
 		} else {
-			post("delayl : maxdelay is zero and delay is a signal\n");
+			sapf_post("delayl : maxdelay is zero and delay is a signal\n");
 			throw errFailed;
 		}
 	}
@@ -301,7 +301,7 @@ static void delayc_(Thread& th, Prim* prim)
 		if (delay.isReal()) {
 			maxdelay = delay.f;
 		} else {
-			post("delayc : maxdelay is zero and delay is a signal\n");
+			sapf_post("delayc : maxdelay is zero and delay is a signal\n");
 			throw errFailed;
 		}
 	}
@@ -460,7 +460,7 @@ static void flange_(Thread& th, Prim* prim)
 		if (delay.isReal()) {
 			maxdelay = delay.f;
 		} else {
-			post("flange : maxdelay is zero and delay is a signal\n");
+			sapf_post("flange : maxdelay is zero and delay is a signal\n");
 			throw errFailed;
 		}
 	}
@@ -478,7 +478,7 @@ static void flangep_(Thread& th, Prim* prim)
 		if (delay.isReal()) {
 			maxdelay = delay.f;
 		} else {
-			post("flangep : maxdelay is zero and delay is a signal\n");
+			sapf_post("flangep : maxdelay is zero and delay is a signal\n");
 			throw errFailed;
 		}
 	}
@@ -578,7 +578,7 @@ static void combn_(Thread& th, Prim* prim)
 		if (delay.isReal()) {
 			maxdelay = delay.f;
 		} else {
-			post("combn : maxdelay is zero and delay is a signal\n");
+			sapf_post("combn : maxdelay is zero and delay is a signal\n");
 			throw errFailed;
 		}
 	}
@@ -706,7 +706,7 @@ static void combl_(Thread& th, Prim* prim)
 		if (delay.isReal()) {
 			maxdelay = delay.f;
 		} else {
-			post("combl : maxdelay is zero and delay is a signal\n");
+			sapf_post("combl : maxdelay is zero and delay is a signal\n");
 			throw errFailed;
 		}
 	}
@@ -840,7 +840,7 @@ static void combc_(Thread& th, Prim* prim)
 		if (delay.isReal()) {
 			maxdelay = delay.f;
 		} else {
-			post("combc : maxdelay is zero and delay is a signal\n");
+			sapf_post("combc : maxdelay is zero and delay is a signal\n");
 			throw errFailed;
 		}
 	}
@@ -1064,7 +1064,7 @@ static void lpcombc_(Thread& th, Prim* prim)
 		if (delay.isReal()) {
 			maxdelay = delay.f;
 		} else {
-			post("lpcombc : maxdelay is zero and delay is a signal\n");
+			sapf_post("lpcombc : maxdelay is zero and delay is a signal\n");
 			throw errFailed;
 		}
 	}
@@ -1166,7 +1166,7 @@ static void alpasn_(Thread& th, Prim* prim)
 		if (delay.isReal()) {
 			maxdelay = delay.f;
 		} else {
-			post("alpasn : maxdelay is zero and delay is a signal\n");
+			sapf_post("alpasn : maxdelay is zero and delay is a signal\n");
 			throw errFailed;
 		}
 	}
@@ -1297,7 +1297,7 @@ static void alpasl_(Thread& th, Prim* prim)
 		if (delay.isReal()) {
 			maxdelay = delay.f;
 		} else {
-			post("alpasl : maxdelay is zero and delay is a signal\n");
+			sapf_post("alpasl : maxdelay is zero and delay is a signal\n");
 			throw errFailed;
 		}
 	}
@@ -1434,7 +1434,7 @@ static void alpasc_(Thread& th, Prim* prim)
 		if (delay.isReal()) {
 			maxdelay = delay.f;
 		} else {
-			post("alpasc : maxdelay is zero and delay is a signal\n");
+			sapf_post("alpasc : maxdelay is zero and delay is a signal\n");
 			throw errFailed;
 		}
 	}

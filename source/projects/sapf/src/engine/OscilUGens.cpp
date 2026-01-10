@@ -446,7 +446,7 @@ static void osc_(Thread& th, Prim* prim)
 	V freq = th.popZIn("osc : freq");
 
 	if (!tables->isPacked() || tables->length(th) != kWaveTableTotalSize) {
-		post("osc : tables is not a wave table. must be a signal of %d x %d samples.", kNumTables, kWaveTableSize);
+		sapf_post("osc : tables is not a wave table. must be a signal of %d x %d samples.", kNumTables, kWaveTableSize);
 		throw errWrongType;
 	}
 
@@ -623,7 +623,7 @@ static void oscp_(Thread& th, Prim* prim)
 	V freq = th.popZIn("oscp : freq");
 
 	if (!tables->isPacked() || tables->length(th) != kWaveTableTotalSize) {
-		post("oscp : tables is not a wave table. must be a signal of %d x %d samples.", kNumTables, kWaveTableSize);
+		sapf_post("oscp : tables is not a wave table. must be a signal of %d x %d samples.", kNumTables, kWaveTableSize);
 		throw errWrongType;
 	}
 
@@ -767,7 +767,7 @@ static void sosc_(Thread& th, Prim* prim)
 	V freq1 = th.popZIn("sosc : freq1");
 
 	if (!tables->isPacked() || tables->length(th) != kWaveTableTotalSize) {
-		post("sosc : tables is not a wave table. must be a signal of %d x %d samples.", kNumTables, kWaveTableSize);
+		sapf_post("sosc : tables is not a wave table. must be a signal of %d x %d samples.", kNumTables, kWaveTableSize);
 		throw errWrongType;
 	}
 

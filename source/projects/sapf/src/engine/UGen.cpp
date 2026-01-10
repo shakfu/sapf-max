@@ -1343,7 +1343,7 @@ static void adsr_(Thread& th, Prim* prim)
 	const int kNumADSRStages = 4;
 	Z env[kNumADSRStages];
 	if (list->fillz(th, kNumADSRStages, env) != kNumADSRStages) {
-		post("adsr : [attack decay sustain release] list should have 4 elements.");
+		sapf_post("adsr : [attack decay sustain release] list should have 4 elements.");
 	}
 		
 	Z relTime = env[3];
@@ -1370,7 +1370,7 @@ static void dadsr_(Thread& th, Prim* prim)
 	const int kNumADSRStages = 5;
 	Z env[kNumADSRStages];
 	if (list->fillz(th, kNumADSRStages, env) != kNumADSRStages) {
-		post("dahdsr : [delay attack decay sustain release] list should have 5 elements.");
+		sapf_post("dahdsr : [delay attack decay sustain release] list should have 5 elements.");
 	}
 	
 	Z relTime = env[4];
@@ -1398,7 +1398,7 @@ static void dahdsr_(Thread& th, Prim* prim)
 	const int kNumADSRStages = 6;
 	Z env[kNumADSRStages];
 	if (list->fillz(th, kNumADSRStages, env) != kNumADSRStages) {
-		post("dahdsr : [delay attack hold decay sustain release] list should have 6 elements.");
+		sapf_post("dahdsr : [delay attack hold decay sustain release] list should have 6 elements.");
 	}
 	
 	Z relTime = env[5];
@@ -1555,15 +1555,15 @@ static void kr_(Thread& th, Prim* prim)
 	V fun = th.pop();
 	
 	if (n <= 0) {
-		post("krc : n <= 0\n");
+		sapf_post("krc : n <= 0\n");
 		throw errOutOfRange;
 	}
 	if (n > th.rate.blockSize) {
-		post("krc : n > block size\n");
+		sapf_post("krc : n > block size\n");
 		throw errOutOfRange;
 	}
 	if (th.rate.blockSize % n != 0) {
-		post("kr : %d is not a divisor of the current signal block size %d\n", n, th.rate.blockSize);
+		sapf_post("kr : %d is not a divisor of the current signal block size %d\n", n, th.rate.blockSize);
 		throw errFailed;
 	}
 	
@@ -1593,15 +1593,15 @@ static void krc_(Thread& th, Prim* prim)
 	V fun = th.pop();
 	
 	if (n <= 0) {
-		post("krc : n <= 0\n");
+		sapf_post("krc : n <= 0\n");
 		throw errOutOfRange;
 	}
 	if (n > th.rate.blockSize) {
-		post("krc : n > block size\n");
+		sapf_post("krc : n > block size\n");
 		throw errOutOfRange;
 	}
 	if (th.rate.blockSize % n != 0) {
-		post("krc : %d is not a divisor of the current signal block size %d\n", n, th.rate.blockSize);
+		sapf_post("krc : %d is not a divisor of the current signal block size %d\n", n, th.rate.blockSize);
 		throw errFailed;
 	}
 	
@@ -2992,7 +2992,7 @@ static void ola_(Thread& th, Prim* prim)
 	V sounds = th.pop();
 
 	if (numChannels > kMaxOverlapAddChannels) {
-		post("ola : too many channels\n");
+		sapf_post("ola : too many channels\n");
 		throw errFailed;
 	}
 	

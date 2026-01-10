@@ -53,7 +53,7 @@ const char* opcode_name[kNumOpcodes] =
 static void printOpcode(Thread& th, Opcode* c)
 {
 	V& v = c->v;
-	post("%p %s ", c, opcode_name[c->op]);
+	sapf_post("%p %s ", c, opcode_name[c->op]);
 	switch (c->op) {
 		case opPushImmediate :
 		case opPushWorkspaceVar :
@@ -78,10 +78,10 @@ static void printOpcode(Thread& th, Opcode* c)
 		case opCallFunVar :
 		case opBindLocal :
 		case opBindLocalFromList :
-			post("%lld", (int64_t)v.i);
+			sapf_post("%lld", (int64_t)v.i);
 			break;
 		case opEach :
-			post("%llx", (int64_t)v.i);
+			sapf_post("%llx", (int64_t)v.i);
 			break;
 		
 		case opNone :
@@ -89,9 +89,9 @@ static void printOpcode(Thread& th, Opcode* c)
 			break;
 		
 		default :
-			post("BAD OPCODE\n");
+			sapf_post("BAD OPCODE\n");
 	}
-	post("\n");
+	sapf_post("\n");
 }
 
 void Thread::run(Opcode* opc)
@@ -103,7 +103,7 @@ void Thread::run(Opcode* opc)
 			V& v = opc->v;
 
 			if (vm.traceon) {
-				post("stack : "); th.printStack(); post("\n");
+				sapf_post("stack : "); th.printStack(); sapf_post("\n");
 				printOpcode(th, opc);
 			}
 
@@ -164,7 +164,7 @@ void Thread::run(Opcode* opc)
 				case opBindWorkspaceVar : {
                     V value = pop();
                     if (value.isList() && !value.isFinite()) {
-                        post("WARNING: binding a possibly infinite list at the top level can leak unbounded memory!\n");
+                        sapf_post("WARNING: binding a possibly infinite list at the top level can leak unbounded memory!\n");
                     } else if (value.isFun()) {
 						const char* mask = value.GetAutoMapMask();
 						const char* help = value.OneLineHelp();
@@ -188,7 +188,7 @@ void Thread::run(Opcode* opc)
 						} else {
 							V value;
 							if (in.one(th, value)) {
-								post("not enough items in list for = [..]\n");
+								sapf_post("not enough items in list for = [..]\n");
 								throw errFailed;
 							}
 							if (opc->op == opBindLocalFromList) {
@@ -196,7 +196,7 @@ void Thread::run(Opcode* opc)
 							} else if (opc->op == opBindWorkspaceVarFromList) {
 								v = opc->v;
 								if (value.isList() && !value.isFinite()) {
-									post("WARNING: binding a possibly infinite list at the top level can leak unbounded memory!\n");
+									sapf_post("WARNING: binding a possibly infinite list at the top level can leak unbounded memory!\n");
 								} else if (value.isFun()) {
 									const char* mask = value.GetAutoMapMask();
 									const char* help = value.OneLineHelp();
@@ -286,14 +286,14 @@ void Thread::run(Opcode* opc)
 				case opReturn : return;
 				
 				default :
-					post("BAD OPCODE\n");
+					sapf_post("BAD OPCODE\n");
 					throw errInternalError;
 			}
 		}
 	} catch (...) {
-		post("backtrace: %s ", opcode_name[opc->op]);
+		sapf_post("backtrace: %s ", opcode_name[opc->op]);
 		opc->v.printShort(th);
-		post("\n");
+		sapf_post("\n");
 		throw;
 	}
 }
@@ -355,10 +355,10 @@ void Code::decompile(Thread& th, std::string& out)
 			case opCallFunVar :
 			case opBindLocal :
 			case opBindLocalFromList :
-				post("%lld", (int64_t)v.i);
+				sapf_post("%lld", (int64_t)v.i);
 				break;
 			case opEach :
-				post("%llx", (int64_t)v.i);
+				sapf_post("%llx", (int64_t)v.i);
 				break;
 			
 			case opNone :
@@ -366,7 +366,7 @@ void Code::decompile(Thread& th, std::string& out)
 				break;
 			
 			default :
-				post("BAD OPCODE\n");
+				sapf_post("BAD OPCODE\n");
 		}
 	}
 }

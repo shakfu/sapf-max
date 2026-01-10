@@ -75,9 +75,9 @@ static void stopPlayer(AUPlayer* player)
 	if (outputUnit) {
 	
 		OSStatus err = AudioOutputUnitStop(outputUnit);
-		if (err) post("AudioOutputUnitStop err %d\n", (int)err);
+		if (err) sapf_post("AudioOutputUnitStop err %d\n", (int)err);
 		err = AudioComponentInstanceDispose(outputUnit);
-		if (err) post("AudioComponentInstanceDispose outputUnit err %d\n", (int)err);
+		if (err) sapf_post("AudioComponentInstanceDispose outputUnit err %d\n", (int)err);
 		
 	}
 	delete player;
@@ -145,21 +145,21 @@ zeroAll:
 				done = done && imdone;
 			} catch (int err) {
 				if (err <= -1000 && err > -1000 - kNumErrors) {
-					post("\nerror: %s\n", errString[-1000 - err]);
+					sapf_post("\nerror: %s\n", errString[-1000 - err]);
 				} else {
-					post("\nerror: %d\n", err);
+					sapf_post("\nerror: %d\n", err);
 				}
-				post("exception in real time. stopping player.\n");
+				sapf_post("exception in real time. stopping player.\n");
 				done = true;
 				goto zeroAll;
 			} catch (std::bad_alloc& xerr) {
-				post("\nnot enough memory\n");
-				post("exception in real time. stopping player.\n");
+				sapf_post("\nnot enough memory\n");
+				sapf_post("exception in real time. stopping player.\n");
 				done = true;
 				goto zeroAll;
 			} catch (...) {
-				post("\nunknown error\n");
-				post("exception in real time. stopping player.\n");
+				sapf_post("\nunknown error\n");
+				sapf_post("exception in real time. stopping player.\n");
 				done = true;
 				goto zeroAll;
 			}
@@ -222,7 +222,7 @@ static OSStatus createGraph(AUPlayer* player)
     OSStatus err = noErr;
 	AudioComponentInstance outputUnit = openAU('auou', 'def ', 'appl');
 	if (!outputUnit) {
-		post("open output unit failed\n");
+		sapf_post("open output unit failed\n");
 		return 'fail';
 	}
 	
@@ -233,7 +233,7 @@ static OSStatus createGraph(AUPlayer* player)
 	
 	err = AudioUnitSetProperty(outputUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &fmt, sizeof(fmt));
 	if (err) {
-		post("set outputUnit client format failed\n");
+		sapf_post("set outputUnit client format failed\n");
 		return err;
 	}
 	
@@ -244,23 +244,23 @@ static OSStatus createGraph(AUPlayer* player)
 	
 	err = AudioUnitSetProperty(outputUnit, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, 0, &cbs, sizeof(cbs));
 	if (err) {
-		post("set render callback failed\n");
+		sapf_post("set render callback failed\n");
 		return err;
 	}
 	
 	err = AudioUnitInitialize(outputUnit);
 	if (err) {
-		post("initialize output unit failed\n");
+		sapf_post("initialize output unit failed\n");
 		return err;
 	}
 	
 	err = AudioOutputUnitStart(outputUnit);
 	if (err) {
-		post("start output unit failed\n");
+		sapf_post("start output unit failed\n");
 		return err;
 	}
 	
-	post("start output unit OK\n");
+	sapf_post("start output unit OK\n");
 	
 	return noErr;
 }
@@ -282,7 +282,7 @@ static void playWithAudioUnit(Thread& th, V& v)
 		P<List> s = (List*)v.o();
 		s = s->pack(th, kMaxChannels);
 		if (!s()) {
-			post("Too many channels. Max is %d.\n", kMaxChannels);
+			sapf_post("Too many channels. Max is %d.\n", kMaxChannels);
 			return;
 		}
 		Array* a = s->mArray();
@@ -309,7 +309,7 @@ static void playWithAudioUnit(Thread& th, V& v)
 		OSStatus err = noErr;
 		err = createGraph(player);
 		if (err) {
-			post("play failed: %d '%4.4s'\n", (int)err, (char*)&err);
+			sapf_post("play failed: %d '%4.4s'\n", (int)err, (char*)&err);
 			throw errFailed;
 		}
 	}
@@ -343,7 +343,7 @@ static void recordWithAudioUnit(Thread& th, V& v, Arg filename)
 		P<List> s = (List*)v.o();
 		s = s->pack(th, kMaxChannels);
 		if (!s()) {
-			post("Too many channels. Max is %d.\n", kMaxChannels);
+			sapf_post("Too many channels. Max is %d.\n", kMaxChannels);
 			return;
 		}
 		Array* a = s->mArray();
@@ -384,7 +384,7 @@ static void recordWithAudioUnit(Thread& th, V& v, Arg filename)
 		OSStatus err = noErr;
 		err = createGraph(player);
 		if (err) {
-			post("play failed: %d '%4.4s'\n", (int)err, (char*)&err);
+			sapf_post("play failed: %d '%4.4s'\n", (int)err, (char*)&err);
 			throw errFailed;
 		}
 	}

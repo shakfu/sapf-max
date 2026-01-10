@@ -100,7 +100,7 @@ std::unique_ptr<AlsaAudioBackend::Player> AlsaAudioBackend::createPlayer(Thread&
 		P<List> s = (List*)v.o();
 		s = s->pack(th, kMaxChannels);
 		if (!s()) {
-			post("Too many channels. Max is %d.\n", kMaxChannels);
+			sapf_post("Too many channels. Max is %d.\n", kMaxChannels);
 			return nullptr;
 		}
 		Array* a = s->mArray();
@@ -132,8 +132,8 @@ void AlsaAudioBackend::play(Thread& th, V& v)
 
 void AlsaAudioBackend::record(Thread& th, V& v, Arg filename)
 {
-	post("record: Recording not implemented on Linux (requires libsndfile).\n");
-	post("        Use 'play' instead, or contribute a libsndfile-based implementation.\n");
+	sapf_post("record: Recording not implemented on Linux (requires libsndfile).\n");
+	sapf_post("        Use 'play' instead, or contribute a libsndfile-based implementation.\n");
 }
 
 void AlsaAudioBackend::stopAll()
@@ -222,7 +222,7 @@ void AlsaAudioBackend::audioThreadLoop()
 					} else if (written == -EAGAIN) {
 						continue;
 					} else {
-						post("ALSA write error: %s\n", snd_strerror(written));
+						sapf_post("ALSA write error: %s\n", snd_strerror(written));
 						break;
 					}
 				} else {
@@ -246,7 +246,7 @@ bool AlsaAudioBackend::ensurePcmLocked()
 	snd_pcm_t* handle = nullptr;
 	int err = snd_pcm_open(&handle, "default", SND_PCM_STREAM_PLAYBACK, 0);
 	if (err < 0) {
-		post("ALSA open error: %s\n", snd_strerror(err));
+		sapf_post("ALSA open error: %s\n", snd_strerror(err));
 		return false;
 	}
 
@@ -264,14 +264,14 @@ bool AlsaAudioBackend::ensurePcmLocked()
 	err = snd_pcm_hw_params(handle, params);
 	snd_pcm_hw_params_free(params);
 	if (err < 0) {
-		post("ALSA hw params error: %s\n", snd_strerror(err));
+		sapf_post("ALSA hw params error: %s\n", snd_strerror(err));
 		snd_pcm_close(handle);
 		return false;
 	}
 
 	err = snd_pcm_prepare(handle);
 	if (err < 0) {
-		post("ALSA prepare error: %s\n", snd_strerror(err));
+		sapf_post("ALSA prepare error: %s\n", snd_strerror(err));
 		snd_pcm_close(handle);
 		return false;
 	}

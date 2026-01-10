@@ -32,8 +32,7 @@
 #include "RCObj.hpp"
 #include "PlatformLock.hpp"
 
-// Use C linkage for post() to be compatible with Max SDK
-extern "C" void post(const char* fmt, ...);
+void sapf_post(const char* fmt, ...);
 
 #define COLLECT_MINFO 1
 
@@ -1530,8 +1529,8 @@ class ScopeLog
 {
 	const char* label;
 public:
-	ScopeLog(const char* inLabel) : label(inLabel) { post("%s {\n", label); }
-	~ScopeLog() { post("} %s\n", label); }
+	ScopeLog(const char* inLabel) : label(inLabel) { sapf_post("%s {\n", label); }
+	~ScopeLog() { sapf_post("} %s\n", label); }
 };
 
 ///////////

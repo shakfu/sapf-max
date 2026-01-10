@@ -88,7 +88,7 @@ std::unique_ptr<RtAudioBackend::Player> RtAudioBackend::createPlayer(Thread& th,
 		P<List> s = (List*)v.o();
 		s = s->pack(th, kMaxChannels);
 		if (!s()) {
-			post("Too many channels. Max is %d.\n", kMaxChannels);
+			sapf_post("Too many channels. Max is %d.\n", kMaxChannels);
 			return nullptr;
 		}
 		Array* a = s->mArray();
@@ -149,8 +149,8 @@ void RtAudioBackend::record(Thread& th, V& v, Arg filename)
 	players_.push_back(std::move(player));
 #else
 	(void)th; (void)v; (void)filename;
-	post("record: Recording not implemented on this platform (requires AudioToolbox).\n");
-	post("        Use 'play' instead, or contribute a libsndfile-based implementation.\n");
+	sapf_post("record: Recording not implemented on this platform (requires AudioToolbox).\n");
+	sapf_post("        Use 'play' instead, or contribute a libsndfile-based implementation.\n");
 #endif
 }
 
@@ -242,7 +242,7 @@ int RtAudioBackend::render(float* output, unsigned int frames)
 			}
 			OSStatus err = ExtAudioFileWrite(player.recordFile, frames, abl);
 			if (err) {
-				post("ExtAudioFileWrite failed %d\n", (int)err);
+				sapf_post("ExtAudioFileWrite failed %d\n", (int)err);
 				ExtAudioFileDispose(player.recordFile);
 				player.recordFile = nullptr;
 			}
@@ -274,7 +274,7 @@ bool RtAudioBackend::ensureStreamLocked()
 	}
 
 	if (audio_.getDeviceCount() == 0) {
-		post("RtAudio: no audio devices available.\n");
+		sapf_post("RtAudio: no audio devices available.\n");
 		return false;
 	}
 
@@ -283,7 +283,7 @@ bool RtAudioBackend::ensureStreamLocked()
 	RtAudio::DeviceInfo info = audio_.getDeviceInfo(params.deviceId);
 	streamChannels_ = std::min(kMaxChannels, static_cast<int>(info.outputChannels));
 	if (streamChannels_ <= 0) {
-		post("RtAudio: selected device has no output channels.\n");
+		sapf_post("RtAudio: selected device has no output channels.\n");
 		return false;
 	}
 	params.nChannels = streamChannels_;
@@ -297,14 +297,14 @@ bool RtAudioBackend::ensureStreamLocked()
 
 	RtAudioErrorType err = audio_.openStream(&params, nullptr, RTAUDIO_FLOAT32, streamSampleRate_, &frames, &RtAudioBackend::audioCallback, this, &options);
 	if (err != RTAUDIO_NO_ERROR) {
-		post("RtAudio open error: %s\n", audio_.getErrorText().c_str());
+		sapf_post("RtAudio open error: %s\n", audio_.getErrorText().c_str());
 		streamOpen_ = false;
 		return false;
 	}
 
 	err = audio_.startStream();
 	if (err != RTAUDIO_NO_ERROR) {
-		post("RtAudio start error: %s\n", audio_.getErrorText().c_str());
+		sapf_post("RtAudio start error: %s\n", audio_.getErrorText().c_str());
 		audio_.closeStream();
 		streamOpen_ = false;
 		return false;
@@ -364,7 +364,7 @@ std::unique_ptr<AudioBackend> CreateRtAudioBackend()
 	try {
 		return std::unique_ptr<AudioBackend>(new RtAudioBackend());
 	} catch (const std::exception& err) {
-		post("RtAudio init error: %s\n", err.what());
+		sapf_post("RtAudio init error: %s\n", err.what());
 		return nullptr;
 	}
 }

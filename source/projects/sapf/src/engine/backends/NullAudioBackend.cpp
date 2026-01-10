@@ -14,13 +14,13 @@ public:
 
 	void play(Thread&, V&) override
 	{
-		post("%s\n", message_.c_str());
+		sapf_post("%s\n", message_.c_str());
 		throw errFailed;
 	}
 
 	void record(Thread&, V&, Arg) override
 	{
-		post("%s\n", message_.c_str());
+		sapf_post("%s\n", message_.c_str());
 		throw errFailed;
 	}
 

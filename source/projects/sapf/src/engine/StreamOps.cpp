@@ -125,7 +125,7 @@ static void untupleN_(Thread& th, Prim* prim)
 	for (int i = 0; i < N; ++i) {
 		V v;
 		if (in.one(th, v)) {
-			post("too few items in list for un%d", N);
+			sapf_post("too few items in list for un%d", N);
 			throw errFailed;
 		}
 		th.push(v);
@@ -1330,7 +1330,7 @@ static void degkey_(Thread& th, Prim* prim)
 	
 	int degreesPerCycle = (int)a->size()-1;
 	if (degreesPerCycle <= 0) {
-		post("degkey : scale has no degrees");
+		sapf_post("degkey : scale has no degrees");
 		throw errFailed;
 	}
 	Z cycleWidth = a->atz(degreesPerCycle);
@@ -1353,7 +1353,7 @@ static void keydeg_(Thread& th, Prim* prim)
 	
 	int degreesPerCycle = (int)a->size()-1;
 	if (degreesPerCycle <= 0) {
-		post("keydeg : scale has no degrees");
+		sapf_post("keydeg : scale has no degrees");
 		throw errFailed;
 	}
 	Z cycleWidth = a->atz(degreesPerCycle);
@@ -3322,14 +3322,14 @@ struct Append : Gen
 				_b = th.pop();
 			}
 			if (!_b.isList()) {
-				post("$ : b is not a sequence  '%s'\n", _b.TypeName());
+				sapf_post("$ : b is not a sequence  '%s'\n", _b.TypeName());
 				end();
 				return;
 			}
 			
 			List* b = (List*)_b.o();
 			if (elemType != b->elemType) {
-				post("$ : b item type doesn't match\n");
+				sapf_post("$ : b item type doesn't match\n");
 				end();
 				return;
 			}
@@ -5673,10 +5673,10 @@ static void bench_(Thread& th, Prim* prim)
 	double secondsOfAudio = (double)framesFilled * th.rate.invSampleRate;
 	double percentOfRealtime = 100. * secondsOfCPU / secondsOfAudio;
 	
-	post("bench:\n");
-	post("  %f seconds of audio.\n", secondsOfAudio);
-	post("  %f seconds of CPU.\n", secondsOfCPU);
-	post("  %f %% of real time.\n", percentOfRealtime);
+	sapf_post("bench:\n");
+	sapf_post("  %f seconds of audio.\n", secondsOfAudio);
+	sapf_post("  %f seconds of CPU.\n", secondsOfCPU);
+	sapf_post("  %f %% of real time.\n", percentOfRealtime);
 	
 }
 
@@ -5988,11 +5988,11 @@ static void fft_(Thread& th, Prim* prim)
 	int n = (int)inReal->length(th);
 	int m = (int)inImag->length(th);
 	if (n != m) {
-		post("fft : real and imag parts are different lengths.\n");
+		sapf_post("fft : real and imag parts are different lengths.\n");
 		throw errFailed;
 	}
 	if (!ISPOWEROFTWO64(n)) {
-		post("fft : size is not a power of two.\n");
+		sapf_post("fft : size is not a power of two.\n");
 		throw errFailed;
 	}
 	
@@ -6026,11 +6026,11 @@ static void ifft_(Thread& th, Prim* prim)
 	int n = (int)inReal->length(th);
 	int m = (int)inImag->length(th);
 	if (n != m) {
-		post("ifft : real and imag parts are different lengths.\n");
+		sapf_post("ifft : real and imag parts are different lengths.\n");
 		throw errFailed;
 	}
 	if (!ISPOWEROFTWO64(n)) {
-		post("ifft : size is not a power of two.\n");
+		sapf_post("ifft : size is not a power of two.\n");
 		throw errFailed;
 	}
 	
@@ -6887,7 +6887,7 @@ static void merge_(Thread& th, Prim* prim)
 			th.push(new List(new Merge(th, a, b, fun)));
 		}
 	} else {
-		post("merge : lists not same type\n");
+		sapf_post("merge : lists not same type\n");
 		throw errFailed;
 	}
 }
@@ -6903,7 +6903,7 @@ static void mergec_(Thread& th, Prim* prim)
 	} else if (a.isVList() && b.isVList()) {
 		th.push(new List(new MergeCmp(th, a, b, fun)));
 	} else {
-		post("mergec : lists not same type\n");
+		sapf_post("mergec : lists not same type\n");
 		throw errFailed;
 	}
 }

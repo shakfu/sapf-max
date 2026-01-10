@@ -177,7 +177,7 @@ public:
 					args[i].setv(inArgs[i]);
 					break;
 				default :
-					post("unrecognized AutoMap char '%c'\n", inMask[i]);
+					sapf_post("unrecognized AutoMap char '%c'\n", inMask[i]);
 				case 'k' :
 					args[i].set(inArgs[i]);
 					
@@ -248,7 +248,7 @@ void automap_(Thread& th, Prim* prim)
 				}
 				break;
 			default :
-				post("unrecognized AutoMap char '%c'\n", mask[k]);
+				sapf_post("unrecognized AutoMap char '%c'\n", mask[k]);
 				throw errFailed;
 				break;
 			case 'k' :
@@ -429,7 +429,7 @@ List* handleEachOps(Thread& th, int numArgs, Arg fun)
 		}
 	}
 	if (maxMask > 1 && maxMask != NEXTPOWEROFTWO(maxMask) - 1) {
-		post("there are empty levels of iteration. mask: %x\n", maxMask);
+		sapf_post("there are empty levels of iteration. mask: %x\n", maxMask);
 		throw errFailed;
 	}
 	
@@ -702,14 +702,14 @@ void flop_(Thread& th, Prim* prim)
 		VIn in(s);
 		V first;
 		if (in.one(th, first)) {
-			post("flop : can't flop an empty list.");
+			sapf_post("flop : can't flop an empty list.");
 			throw errFailed;
 		}
 		if (!first.isList()) {
 			wrongType("flop : first item in list", "List", first);
 		}
 		if (!first.isFinite()) {
-			post("flop : can't flop an infinite list of infinite lists.");
+			sapf_post("flop : can't flop an infinite list of infinite lists.");
 			throw errFailed;
 		}
 		
@@ -764,14 +764,14 @@ void flops_(Thread& th, Prim* prim)
 		VIn in(s);
 		V first;
 		if (in.one(th, first)) {
-			post("flops : can't flop an empty list.");
+			sapf_post("flops : can't flop an empty list.");
 			throw errFailed;
 		}
 		if (!first.isList()) {
 			wrongType("flops : first item in list", "List", first);
 		}
 		if (!first.isFinite()) {
-			post("flops : can't flop an infinite list of infinite lists.");
+			sapf_post("flops : can't flop an infinite list of infinite lists.");
 			throw errFailed;
 		}
 		
@@ -829,14 +829,14 @@ void flop1_(Thread& th, Prim* prim)
 		VIn in(s);
 		V first;
 		if (in.one(th, first)) {
-			post("flop1 : can't flop an empty list.");
+			sapf_post("flop1 : can't flop an empty list.");
 			throw errFailed;
 		}
 		if (!first.isList()) {
 			wrongType("flop1 : first item in list", "List", first);
 		}
 		if (!first.isFinite()) {
-			post("flop1 : can't flop an infinite list of infinite lists.");
+			sapf_post("flop1 : can't flop an infinite list of infinite lists.");
 			throw errFailed;
 		}
 		
@@ -902,7 +902,7 @@ public:
 	Lacez(Thread& th, bool inFinite, size_t n, V* inArgs)
 		: Gen(th, itemTypeZ, inFinite), numArgs(n), argPos(0)
 	{
-		post("Lacez\n");
+		sapf_post("Lacez\n");
 		args.reserve(numArgs);
 		for (size_t i = 0; i < numArgs; ++i) {
 			ZIn in;

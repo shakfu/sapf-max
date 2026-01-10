@@ -48,7 +48,7 @@ void MaxAudioBackend::play(Thread& th, V& v)
 		P<List> s = (List*)v.o();
 		s = s->pack(th, kMaxChannels);
 		if (!s()) {
-			post("Too many channels. Max is %d.\n", kMaxChannels);
+			sapf_post("Too many channels. Max is %d.\n", kMaxChannels);
 			return;
 		}
 		Array* a = s->mArray();
@@ -71,7 +71,7 @@ void MaxAudioBackend::record(Thread& th, V& v, Arg filename)
 	(void)th;
 	(void)v;
 	(void)filename;
-	post("record is not supported in the Max/MSP backend.\n");
+	sapf_post("record is not supported in the Max/MSP backend.\n");
 	throw errFailed;
 }
 

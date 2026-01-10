@@ -2408,7 +2408,7 @@ static void wpicks_(Thread& th, Prim* prim)
 	P<Array> wa = w->mArray;
 
 	if (aa->size() != wa->size()) {
-		post("list and weights are not the same length.\n");
+		sapf_post("list and weights are not the same length.\n");
 		throw errFailed;
 	}
 
@@ -2432,7 +2432,7 @@ static void wpickz_(Thread& th, Prim* prim)
 	P<Array> wa = w->mArray;
 
 	if (aa->size() != wa->size()) {
-		post("list and weights are not the same length.\n");
+		sapf_post("list and weights are not the same length.\n");
 		throw errFailed;
 	}
     
@@ -2458,7 +2458,7 @@ static void nwpicks_(Thread& th, Prim* prim)
 	P<Array> wa = w->mArray;
 
 	if (aa->size() != wa->size()) {
-		post("list and weights are not the same length.\n");
+		sapf_post("list and weights are not the same length.\n");
 		throw errFailed;
 	}
 
@@ -2484,7 +2484,7 @@ static void nwpickz_(Thread& th, Prim* prim)
 	P<Array> wa = w->mArray;
 
 	if (aa->size() != wa->size()) {
-		post("list and weights are not the same length.\n");
+		sapf_post("list and weights are not the same length.\n");
 		throw errFailed;
 	}
 
@@ -2511,7 +2511,7 @@ static void wpick_(Thread& th, Prim* prim)
 	const int64_t wn = wa->size();
 
 	if (n != wn) {
-		post("list and weights are not the same length.\n");
+		sapf_post("list and weights are not the same length.\n");
 		throw errFailed;
 	}
 

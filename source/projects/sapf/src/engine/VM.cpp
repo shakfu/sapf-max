@@ -323,7 +323,7 @@ void Thread::repl(FILE* infile, const char* inLogfilename)
 
 	myhistory = history_init();
 	if (myhistory == 0) {
-		post("history could not be initialized\n");
+		sapf_post("history could not be initialized\n");
 		return;
 	}
 
@@ -343,25 +343,25 @@ void Thread::repl(FILE* infile, const char* inLogfilename)
 	fflush(infile);
 	bool running = true;
 
-	post("Type 'helpall' to get a list of all built-in functions.\n");
-	post("Type 'quit' to quit.\n");
+	sapf_post("Type 'helpall' to get a list of all built-in functions.\n");
+	sapf_post("Type 'quit' to quit.\n");
 	
 	do {
 		try {
 			if (stackDepth()) {
 				printStack();
-				post("\n");
+				sapf_post("\n");
 			}
 		} catch (int err) {
 			if (err <= -1000 && err > -1000 - kNumErrors) {
-				post("\nerror: %s\n", errString[-1000 - err]);
+				sapf_post("\nerror: %s\n", errString[-1000 - err]);
 			} else {
-				post("\nerror: %d\n", err);
+				sapf_post("\nerror: %d\n", err);
 			}
 		} catch (std::bad_alloc& xerr) {
-			post("\nnot enough memory\n");
+			sapf_post("\nnot enough memory\n");
 		} catch (...) {
-			post("\nunknown error\n");
+			sapf_post("\nunknown error\n");
 		}
 				
 		try {
@@ -374,22 +374,22 @@ void Thread::repl(FILE* infile, const char* inLogfilename)
 				}
 			}
 		} catch (V& v) {
-            post("error: ");
+            sapf_post("error: ");
             v.print(th);
-			post("\n");
+			sapf_post("\n");
 		} catch (int err) {
 			if (err == errUserQuit) {
-				post("good bye\n");
+				sapf_post("good bye\n");
 				running = false;
 			} else if (err <= -1000 && err > -1000 - kNumErrors) {
-				post("error: %s\n", errString[-1000 - err]);
+				sapf_post("error: %s\n", errString[-1000 - err]);
 			} else {
-				post("error: %d\n", err);
+				sapf_post("error: %d\n", err);
 			}
 		} catch (std::bad_alloc& xerr) {
-			post("not enough memory\n");
+			sapf_post("not enough memory\n");
 		} catch (...) {
-			post("unknown error\n");
+			sapf_post("unknown error\n");
 		}
 
 	} while (running);
@@ -418,10 +418,10 @@ public:
 
 void loadFile(Thread& th, const char* filename)
 {
-    post("loading file '%s'\n", filename);
+    sapf_post("loading file '%s'\n", filename);
 	FILE* f = fopen(filename, "r");
 	if (!f) {
-		post("could not open '%s'\n", filename);
+		sapf_post("could not open '%s'\n", filename);
 		return;
 	}
 
@@ -438,25 +438,25 @@ void loadFile(Thread& th, const char* filename)
 		{
 			P<Fun> compiledFun;
 			if (th.compile(p, compiledFun, true)) {
-				post("compiled OK.\n");
+				sapf_post("compiled OK.\n");
 				compiledFun->run(th);
-				post("done loading file\n");
+				sapf_post("done loading file\n");
 			}
 		}
     } catch (V& v) {
-        post("error: ");
+        sapf_post("error: ");
         v.print(th);
-        post("\n");
+        sapf_post("\n");
 	} catch (int err) {
 		if (err <= -1000 && err > -1000 - kNumErrors) {
-			post("error: %s\n", errString[-1000 - err]);
+			sapf_post("error: %s\n", errString[-1000 - err]);
 		} else {
-			post("error: %d\n", err);
+			sapf_post("error: %d\n", err);
 		}
 	} catch (std::bad_alloc& xerr) {
-		post("not enough memory\n");
+		sapf_post("not enough memory\n");
 	} catch (...) {
-		post("unknown error\n");
+		sapf_post("unknown error\n");
 	}
 }
 
@@ -466,11 +466,11 @@ void Thread::printStack()
 	size_t n = stackDepth();
 	for (size_t i = 0; i < n; ++i) {
 		V* s = &stack[stackBase+i];
-		if (between) post(" ");
+		if (between) sapf_post(" ");
 		else between = true;
 		std::string cppstring;
 		s->print(*this, cppstring);
-		post("%s", cppstring.c_str());
+		sapf_post("%s", cppstring.c_str());
 	}
 }
 
@@ -480,11 +480,11 @@ void Thread::printLocals()
 	size_t n = numLocals();
 	for (size_t i = 0; i < n; ++i) {
 		V* s = &local[localBase+i];
-		if (between) post(" ");
+		if (between) sapf_post(" ");
 		else between = true;
 		std::string cppstring;
 		s->print(*this, cppstring);
-		post("%s", cppstring.c_str());
+		sapf_post("%s", cppstring.c_str());
 	}
 }
 
@@ -687,7 +687,7 @@ bool Thread::compile(const char* inString, P<Fun>& compiledFun, bool inTopLevel)
 	getLine();
 	bool ok = parseElems(th, code);
 	if (!ok || !code) {
-		post("parse error. %d\n", ok);
+		sapf_post("parse error. %d\n", ok);
 		return false;
 	}
 		
@@ -787,7 +787,7 @@ int CompileScope::innerBindVar(Thread& th, P<String> const& inName, size_t& outI
 	V v;
 	int scope = directLookup(th, inName, outIndex, v);
 	if (scope == scopeFunVar) {
-		post("Name %s is already in use in this scope as a free variable.\n", inName->cstr());
+		sapf_post("Name %s is already in use in this scope as a free variable.\n", inName->cstr());
 		throw errSyntax;
 	}
 	

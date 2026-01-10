@@ -201,14 +201,14 @@ void sfread(Thread& th, Arg filename, int64_t offset, int64_t frames)
 
 	CFStringRef cfpath = CFStringCreateWithFileSystemRepresentation(0, path);
 	if (!cfpath) {
-		post("failed to create path\n");
+		sapf_post("failed to create path\n");
 		return;
 	}
 	CFReleaser cfpathReleaser(cfpath);
 
 	CFURLRef url = CFURLCreateWithFileSystemPath(0, cfpath, kCFURLPOSIXPathStyle, false);
 	if (!url) {
-		post("failed to create url\n");
+		sapf_post("failed to create url\n");
 		return;
 	}
 	CFReleaser urlReleaser(url);
@@ -220,7 +220,7 @@ void sfread(Thread& th, Arg filename, int64_t offset, int64_t frames)
 	urlReleaser.release();
 
 	if (err) {
-		post("failed to open file %d\n", (int)err);
+		sapf_post("failed to open file %d\n", (int)err);
 		return;
 	}
 
@@ -245,14 +245,14 @@ void sfread(Thread& th, Arg filename, int64_t offset, int64_t frames)
 
 	err = ExtAudioFileSetProperty(xaf, kExtAudioFileProperty_ClientDataFormat, sizeof(clientFormat), &clientFormat);
 	if (err) {
-		post("failed to set client data format\n");
+		sapf_post("failed to set client data format\n");
 		ExtAudioFileDispose(xaf);
 		return;
 	}
 
 	err = ExtAudioFileSeek(xaf, offset);
 	if (err) {
-		post("seek failed %d\n", (int)err);
+		sapf_post("seek failed %d\n", (int)err);
 		ExtAudioFileDispose(xaf);
 		return;
 	}
@@ -269,14 +269,14 @@ ExtAudioFileRef sfcreate(Thread& th, const char* path, int numChannels, double f
 
 	CFStringRef cfpath = CFStringCreateWithFileSystemRepresentation(0, path);
 	if (!cfpath) {
-		post("failed to create path '%s'\n", path);
+		sapf_post("failed to create path '%s'\n", path);
 		return nullptr;
 	}
 	CFReleaser cfpathReleaser(cfpath);
 
 	CFURLRef url = CFURLCreateWithFileSystemPath(0, cfpath, kCFURLPOSIXPathStyle, false);
 	if (!url) {
-		post("failed to create url\n");
+		sapf_post("failed to create url\n");
 		return nullptr;
 	}
 	CFReleaser urlReleaser(url);
@@ -312,13 +312,13 @@ ExtAudioFileRef sfcreate(Thread& th, const char* path, int numChannels, double f
 	OSStatus err = ExtAudioFileCreateWithURL(url, kAudioFileWAVEType, &fileFormat, nullptr, kAudioFileFlags_EraseFile, &xaf);
 
 	if (err) {
-		post("failed to create file '%s'. err: %d\n", path, (int)err);
+		sapf_post("failed to create file '%s'. err: %d\n", path, (int)err);
 		return nullptr;
 	}
 
 	err = ExtAudioFileSetProperty(xaf, kExtAudioFileProperty_ClientDataFormat, sizeof(clientFormat), &clientFormat);
 	if (err) {
-		post("failed to set client data format\n");
+		sapf_post("failed to set client data format\n");
 		ExtAudioFileDispose(xaf);
 		return nullptr;
 	}
@@ -392,14 +392,14 @@ void sfwrite(Thread& th, V& v, Arg filename, bool openIt)
 		abl.mBuffers[0].mDataByteSize = minn * sizeof(float);
 		OSStatus err = ExtAudioFileWrite(xaf, minn, &abl);
 		if (err) {
-			post("ExtAudioFileWrite failed %d\n", (int)err);
+			sapf_post("ExtAudioFileWrite failed %d\n", (int)err);
 			break;
 		}
 
 		framesWritten += minn;
 	}
 
-	post("wrote file '%s'  %d channels  %g secs\n", path, numChannels, framesWritten * th.rate.invSampleRate);
+	sapf_post("wrote file '%s'  %d channels  %g secs\n", path, numChannels, framesWritten * th.rate.invSampleRate);
 
 	ExtAudioFileDispose(xaf);
 
@@ -416,14 +416,14 @@ void sfwrite(Thread& th, V& v, Arg filename, bool openIt)
 
 void sfread(Thread& th, Arg filename, int64_t offset, int64_t frames)
 {
-	post("sfread: Sound file reading not implemented on this platform\n");
-	post("        Consider contributing a libsndfile-based implementation.\n");
+	sapf_post("sfread: Sound file reading not implemented on this platform\n");
+	sapf_post("        Consider contributing a libsndfile-based implementation.\n");
 }
 
 void sfwrite(Thread& th, V& v, Arg filename, bool openIt)
 {
-	post("sfwrite: Sound file writing not implemented on this platform\n");
-	post("         Consider contributing a libsndfile-based implementation.\n");
+	sapf_post("sfwrite: Sound file writing not implemented on this platform\n");
+	sapf_post("         Consider contributing a libsndfile-based implementation.\n");
 }
 
 #endif // __APPLE__
