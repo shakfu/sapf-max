@@ -1,0 +1,78 @@
+name: Build and Test
+
+on: [workflow_dispatch]
+  # push:
+  #   branches: [ main, master ]
+  # pull_request:
+  #   branches: [ main, master ]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run Tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sapf-macos
+          path: |
+            build/sapf
+            build/libsapf.a
+          retention-days: 14
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libedit-dev \
+            libusb-1.0-0-dev
+
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run Tests
+        run: ctest --test-dir build --output-on-failure -E "^midi_"
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sapf-linux
+          path: |
+            build/sapf
+            build/libsapf.a
+          retention-days: 14
+
+  # build-windows:
+  #   runs-on: windows-latest
+  #   # Windows support is experimental - libedit not available
+  #   continue-on-error: true
+  #   steps:
+  #     - uses: actions/checkout@v4
+
+  #     - name: Configure CMake
+  #       run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+  #     - name: Build
+  #       run: cmake --build build --config Release
+
+  #     - name: Run Tests
+  #       run: ctest --test-dir build --output-on-failure -C Release
