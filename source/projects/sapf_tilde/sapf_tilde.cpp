@@ -288,15 +288,18 @@ void sapf_anything(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         }
 
         size_t atomLen = strlen(atomStr);
-        size_t spaceNeeded = atomLen + 2;  // space + atom + null
+        size_t spaceNeeded = atomLen + (bufferUsed > 0 ? 2 : 1);  // space + atom + null (no space if first)
 
         if (bufferUsed + spaceNeeded > sizeof(codeBuffer)) {
             error("sapf~: Code string too long");
             return;
         }
 
-        strcat(codeBuffer, " ");
-        bufferUsed++;
+        // Only add space if there's already content
+        if (bufferUsed > 0) {
+            strcat(codeBuffer, " ");
+            bufferUsed++;
+        }
         strcat(codeBuffer, atomStr);
         bufferUsed += atomLen;
     }
@@ -333,6 +336,21 @@ void sapf_anything(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         error("sapf~: Error: %s", e.what());
         strncpy(x->errorMessage, e.what(), sizeof(x->errorMessage) - 1);
         x->errorMessage[sizeof(x->errorMessage) - 1] = '\0';
+    } catch (int errCode) {
+        pthread_mutex_unlock(&x->threadMutex);
+        // SAPF throws integer error codes
+        const char* errNames[] = {
+            "none", "halt", "failed", "indefinite operation", "wrong type",
+            "out of range", "syntax", "internal bug", "wrong state", "not found",
+            "stack overflow", "stack underflow", "inconsistent inheritance",
+            "undefined operation", "user quit"
+        };
+        int idx = -errCode - 999;  // Convert error code to index
+        if (idx >= 0 && idx < 15) {
+            error("sapf~: Error: %s (code %d)", errNames[idx], errCode);
+        } else {
+            error("sapf~: Error code %d", errCode);
+        }
     } catch (...) {
         pthread_mutex_unlock(&x->threadMutex);
         error("sapf~: Unknown error during execution");

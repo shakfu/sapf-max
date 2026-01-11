@@ -129,11 +129,12 @@ SAPF uses reverse Polish notation (RPN) - arguments come before operations.
 ### Delays
 
 ```
-// delayl: input delaytime -- signal (linear interpolation)
-0 adc dup 0.25 delayl + play   // Quarter-second echo
+// delayl: input delaytime maxdelay -- signal (linear interpolation)
+0 adc aa 0.25 0.5 delayl + play       // Quarter-second echo (max 0.5s buffer)
+0 adc aa 0.25 0 delayl + play         // Same (0 maxdelay uses delaytime)
 
-// delayc: input delaytime -- signal (cubic interpolation)
-0 adc dup 0.1 delayc 0.5 * + play
+// delayc: input delaytime maxdelay -- signal (cubic interpolation)
+0 adc aa 0.1 0.5 delayc 0.5 * + play  // With wet/dry mix
 ```
 
 ### Amplitude and Mixing
@@ -217,7 +218,7 @@ whitenoise 800 lpf play
 
 ### Echo/Delay Effect
 ```
-0 adc dup 0.3 delayl 0.5 * + play
+0 adc aa 0.3 0 delayl 0.5 * + play
 ```
 
 ### Ring Modulation
@@ -244,7 +245,7 @@ mix play
 
 ### Karplus-Strong Pluck
 ```
-0.01 whitenoise 0.005 delayl 200 lpf play
+0.01 whitenoise 0.005 0 delayl 200 lpf play
 ```
 
 ## Platform Support

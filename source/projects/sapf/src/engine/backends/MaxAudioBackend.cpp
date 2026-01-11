@@ -34,36 +34,35 @@ public:
 
 	virtual void pull(Thread& th) override
 	{
-		// Always produce exactly mBlockSize samples
-		Z* out = mOut->fulfillz(mBlockSize);
-
 		MaxAudioBackend* backend = GetMaxAudioBackend();
-		if (!backend) {
-			// No backend - output silence
-			std::memset(out, 0, mBlockSize * sizeof(Z));
-		} else {
+
+		// Use the actual input buffer size from Max, not SAPF's mBlockSize
+		// This ensures we produce exactly one audio callback's worth of samples
+		int frames = (backend && backend->getInputFrames() > 0)
+			? backend->getInputFrames()
+			: mBlockSize;
+
+		Z* out = mOut->fulfillz(frames);
+
+		if (backend) {
 			float** inputs = backend->getInputBuffers();
 			int numChannels = backend->getInputChannels();
-			int numFrames = backend->getInputFrames();
 
-			if (inputs && mChannel < numChannels && inputs[mChannel] && numFrames > 0) {
-				// Copy available input samples (float to double conversion)
-				int frames = std::min(mBlockSize, numFrames);
+			if (inputs && mChannel < numChannels && inputs[mChannel]) {
+				// Copy input samples (float to double conversion)
 				for (int i = 0; i < frames; ++i) {
 					out[i] = static_cast<Z>(inputs[mChannel][i]);
 				}
-				// Fill remaining with zeros if input block is smaller
-				for (int i = frames; i < mBlockSize; ++i) {
-					out[i] = 0.0;
-				}
 			} else {
-				// No input available - output silence
-				std::memset(out, 0, mBlockSize * sizeof(Z));
+				// Channel not available - output silence
+				std::memset(out, 0, frames * sizeof(Z));
 			}
+		} else {
+			// No backend - output silence
+			std::memset(out, 0, frames * sizeof(Z));
 		}
 
 		// Advance mOut to the next list node for subsequent pulls
-		// (fulfillz creates a new List in mNext with this Gen)
 		mOut = mOut->nextp();
 	}
 };

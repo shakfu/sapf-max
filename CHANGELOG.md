@@ -24,7 +24,11 @@ All notable changes to the sapf~ Max external will be documented in this file.
 - Fixed `post()` function name collision between SAPF library and Max SDK that prevented Max console output from working
 - Special commands (`status`, `help`, `stack`, `clear`, `stop`) now work correctly
 - Added thread safety with mutex protection for compile/execute operations
-- Fixed crash in `AdcGen::pull()` when using `adc`/`adcn` primitives - the generator now correctly advances `mOut` to the next list node after `fulfillz()`, and always produces exactly `mBlockSize` samples
+- Fixed crash in `AdcGen::pull()` when using `adc`/`adcn` primitives - the generator now correctly advances `mOut` to the next list node after `fulfillz()`
+- Fixed audio distortion when using `adc`/`adcn` - the generator now uses Max's actual vector size instead of SAPF's default block size (512), ensuring proper sample-by-sample alignment with the input buffer
+- Fixed incorrect delay examples in README - `delayl`/`delayc` require three arguments: `(input delaytime maxdelay)`
+- Fixed incorrect use of `dup` in README examples - SAPF uses `aa` for stack duplication
+- Fixed leading space in compiled code string when messages start with numbers
 
 ### Removed
 - Removed `code` message prefix requirement - SAPF code can now be sent directly

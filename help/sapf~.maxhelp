@@ -13,6 +13,51 @@
         "boxes": [
             {
                 "box": {
+                    "id": "obj-25",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 227.0, 173.0, 118.0, 22.0 ],
+                    "text": "440 0 sinosc aa play"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-22",
+                    "linecount": 2,
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 310.0, 402.0, 216.0, 35.0 ],
+                    "text": "440 0 sinosc dup 0.25 0.25 delayl 0.5 * + play"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-23",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 422.0, 371.0, 109.0, 22.0 ],
+                    "text": "0 adc 1000 lpf play"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-20",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 245.0, 348.0, 190.0, 22.0 ],
+                    "text": "0 adc aa 0.25 0 delayl 0.3 * + play"
+                }
+            },
+            {
+                "box": {
                     "data": {
                         "clips": [
                             {
@@ -122,7 +167,7 @@
                     "numoutlets": 1,
                     "outlettype": [ "" ],
                     "patching_rect": [ 213.0, 571.5, 230.0, 22.0 ],
-                    "text": "value 6."
+                    "text": "value [infinite_list]"
                 }
             },
             {
@@ -354,7 +399,31 @@
             {
                 "patchline": {
                     "destination": [ "obj-1", 0 ],
+                    "source": [ "obj-20", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-1", 0 ],
                     "source": [ "obj-21", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-1", 0 ],
+                    "source": [ "obj-22", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-1", 0 ],
+                    "source": [ "obj-23", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-1", 0 ],
+                    "source": [ "obj-25", 0 ]
                 }
             },
             {
