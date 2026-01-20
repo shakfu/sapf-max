@@ -56,6 +56,12 @@ typedef struct _sapf {
 
     // Verbose mode for debug output (exposed as attribute)
     long verbose;
+
+    // Last successful code for bang retriggering
+    char lastCode[CODE_BUFFER_SIZE];
+
+    // DSP state tracking
+    bool dspRunning;
 } t_sapf;
 
 // method prototypes
@@ -72,6 +78,8 @@ void sapf_help(t_sapf* x);
 void sapf_stack(t_sapf* x);
 void sapf_clear(t_sapf* x);
 void sapf_stop(t_sapf* x);
+void sapf_bang(t_sapf* x);
+void sapf_dspstate(t_sapf* x, long state);
 
 // Helper function to output stack contents to text outlet
 void outputStackToTextOutlet(t_sapf* x);
@@ -137,6 +145,8 @@ void ext_main(void* r)
     class_addmethod(c, (method)sapf_stack, "stack", 0);
     class_addmethod(c, (method)sapf_clear, "clear", 0);
     class_addmethod(c, (method)sapf_stop, "stop", 0);
+    class_addmethod(c, (method)sapf_bang, "bang", 0);
+    class_addmethod(c, (method)sapf_dspstate, "dspstate", A_DEFLONG, 0);
 
     // Add attributes visible in Max inspector
     // Read-only attributes (set at creation time)
@@ -244,6 +254,12 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
 
             // Initialize error state
             x->errorMessage[0] = '\0';
+
+            // Initialize last code buffer for bang retriggering
+            x->lastCode[0] = '\0';
+
+            // Initialize DSP state
+            x->dspRunning = false;
 
             post("sapf~: Initialized with %d input, %d output channels",
                  x->numInputChannels, x->numOutputChannels);
@@ -379,6 +395,10 @@ void sapf_anything(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
             // Execute the compiled function
             compiledFunction->apply(*x->mainThread);
 
+            // Store successful code for bang retriggering
+            strncpy(x->lastCode, codeBuffer, CODE_BUFFER_SIZE - 1);
+            x->lastCode[CODE_BUFFER_SIZE - 1] = '\0';
+
             size_t stackDepth = x->mainThread->stackDepth();
             if (stackDepth > 0) {
                 if (x->verbose) {
@@ -443,14 +463,19 @@ void sapf_status(t_sapf* x)
         post("sapf~: Thread: NOT initialized");
     }
 
+    post("sapf~: DSP: %s", x->dspRunning ? "running" : "stopped");
     post("sapf~: Sample rate: %.1f Hz", x->currentSampleRate);
-    post("sapf~: Output channels: %d", x->numOutputChannels);
-    post("sapf~: Buffer size: %ld", x->bufferSize);
+    post("sapf~: Channels: %ld in, %ld out", x->numInputChannels, x->numOutputChannels);
+    post("sapf~: Buffer size: %ld samples", x->bufferSize);
 
     if (HasAudioBackend()) {
         post("sapf~: Audio backend: MaxAudioBackend");
     } else {
         post("sapf~: Audio backend: NONE");
+    }
+
+    if (x->lastCode[0] != '\0') {
+        post("sapf~: Last code: %s", x->lastCode);
     }
 
     if (x->errorMessage[0] != '\0') {
@@ -547,6 +572,7 @@ void sapf_dsp64(t_sapf* x, t_object* dsp64, short* count, double samplerate, lon
              x->numInputChannels, x->numOutputChannels, maxvectorsize);
     }
 
+    x->dspRunning = true;
     object_method(dsp64, gensym("dsp_add64"), x, sapf_perform64, 0, NULL);
 }
 
@@ -612,11 +638,12 @@ void sapf_help(t_sapf* x)
     post("  num_inputs:  1-8 (default 2)");
     post("");
     post("Commands:");
+    post("  bang    - Retrigger last code");
+    post("  stop    - Stop all audio playback");
+    post("  clear   - Clear the stack");
+    post("  stack   - Inspect stack contents");
     post("  status  - Show VM status");
     post("  help    - Show this help");
-    post("  stack   - Inspect stack contents");
-    post("  clear   - Clear the stack");
-    post("  stop    - Stop all audio playback");
     post("");
     post("Examples:");
     post("  440 0 sinosc play                 - 440Hz sine wave");
@@ -761,6 +788,74 @@ void outputStackToTextOutlet(t_sapf* x)
 
     } catch (const std::exception& e) {
         post("sapf~: Error outputting stack: %s", e.what());
+    }
+}
+
+void sapf_bang(t_sapf* x)
+{
+    if (!x || !x->mainThread) {
+        error("sapf~: Object not initialized");
+        return;
+    }
+
+    if (x->lastCode[0] == '\0') {
+        post("sapf~: No previous code to retrigger");
+        return;
+    }
+
+    if (x->verbose) {
+        post("sapf~: Retriggering: %s", x->lastCode);
+    }
+
+    pthread_mutex_lock(&x->threadMutex);
+
+    try {
+        P<Fun> compiledFunction;
+        bool success = x->mainThread->compile(x->lastCode, compiledFunction, true);
+
+        if (success && compiledFunction) {
+            compiledFunction->apply(*x->mainThread);
+
+            size_t stackDepth = x->mainThread->stackDepth();
+            if (stackDepth > 0) {
+                if (x->verbose) {
+                    post("sapf~: Executed, %zu items on stack", stackDepth);
+                }
+                outputStackToTextOutlet(x);
+            } else if (x->verbose) {
+                post("sapf~: Executed, stack empty");
+            }
+        } else {
+            error("sapf~: Compilation failed for: %s", x->lastCode);
+        }
+
+        pthread_mutex_unlock(&x->threadMutex);
+
+    } catch (int errCode) {
+        pthread_mutex_unlock(&x->threadMutex);
+        int idx = -1000 - errCode;
+        if (idx >= 0 && idx < kNumErrors) {
+            error("sapf~: Error: %s (code %d)", errString[idx], errCode);
+        } else {
+            error("sapf~: Error code %d", errCode);
+        }
+    } catch (...) {
+        pthread_mutex_unlock(&x->threadMutex);
+        error("sapf~: Unknown error during execution");
+    }
+}
+
+void sapf_dspstate(t_sapf* x, long state)
+{
+    if (!x) {
+        return;
+    }
+
+    // state: 1 = DSP turning on, 0 = DSP turning off
+    x->dspRunning = (state != 0);
+
+    if (x->verbose) {
+        post("sapf~: DSP %s", x->dspRunning ? "started" : "stopped");
     }
 }
 
