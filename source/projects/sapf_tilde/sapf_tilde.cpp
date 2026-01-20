@@ -10,6 +10,7 @@
 #include "sapf/Engine.hpp"
 #include "sapf/MaxAudioBackend.hpp"
 #include "VM.hpp"
+#include "ErrorCodes.hpp"
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <algorithm>
@@ -17,7 +18,9 @@
 #include <vector>
 #include <pthread.h>
 
-#define CODE_BUFFER_SIZE 4096
+// Maximum size for SAPF code strings. 16KB should handle most complex programs.
+// If exceeded, consider splitting code into multiple messages or using loadFile.
+#define CODE_BUFFER_SIZE 16384
 
 // enums for inlets / outlets
 enum INLETS { I_INPUT, NUM_INLETS };
@@ -75,6 +78,10 @@ static t_class* sapf_class = NULL;
 
 // Flag to track if sapf engine has been initialized globally
 static bool gSapfEngineInitialized = false;
+
+// Track the global sample rate to detect conflicts between instances
+// SAPF's VM is a singleton, so all instances must use the same sample rate
+static double gConfiguredSampleRate = 0.0;
 
 // Initialize the SAPF engine (called once globally)
 void initSapfEngine()
@@ -255,7 +262,8 @@ void sapf_anything(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
     if (s && s->s_name) {
         size_t symLen = strlen(s->s_name);
         if (symLen >= sizeof(codeBuffer)) {
-            error("sapf~: Code string too long");
+            error("sapf~: Code string too long (symbol length %zu exceeds buffer size %zu)",
+                  symLen, sizeof(codeBuffer));
             return;
         }
         strcpy(codeBuffer, s->s_name);
@@ -291,7 +299,9 @@ void sapf_anything(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         size_t spaceNeeded = atomLen + (bufferUsed > 0 ? 2 : 1);  // space + atom + null (no space if first)
 
         if (bufferUsed + spaceNeeded > sizeof(codeBuffer)) {
-            error("sapf~: Code string too long");
+            error("sapf~: Code string too long (need %zu bytes, buffer is %zu bytes). "
+                  "Consider splitting into multiple messages.",
+                  bufferUsed + spaceNeeded, sizeof(codeBuffer));
             return;
         }
 
@@ -338,16 +348,11 @@ void sapf_anything(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         x->errorMessage[sizeof(x->errorMessage) - 1] = '\0';
     } catch (int errCode) {
         pthread_mutex_unlock(&x->threadMutex);
-        // SAPF throws integer error codes
-        const char* errNames[] = {
-            "none", "halt", "failed", "indefinite operation", "wrong type",
-            "out of range", "syntax", "internal bug", "wrong state", "not found",
-            "stack overflow", "stack underflow", "inconsistent inheritance",
-            "undefined operation", "user quit"
-        };
-        int idx = -errCode - 999;  // Convert error code to index
-        if (idx >= 0 && idx < 15) {
-            error("sapf~: Error: %s (code %d)", errNames[idx], errCode);
+        // SAPF throws integer error codes (errHalt=-1000, errFailed=-1001, etc.)
+        // Use SAPF's errString array with their indexing formula: -1000 - errCode
+        int idx = -1000 - errCode;
+        if (idx >= 0 && idx < kNumErrors) {
+            error("sapf~: Error: %s (code %d)", errString[idx], errCode);
         } else {
             error("sapf~: Error code %d", errCode);
         }
@@ -359,13 +364,23 @@ void sapf_anything(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
 
 void sapf_list(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
 {
-    // List messages start with a number, so there's no selector symbol
-    // Pass nullptr as the symbol and forward all atoms to sapf_anything
+    // List messages in Max start with a number, so there's no selector symbol.
+    // Pass nullptr for the symbol - sapf_anything handles this case at line 255-263:
+    // when s is nullptr, bufferUsed stays 0 and the first atom is processed
+    // without a leading space, producing correct SAPF code like "1 5 +" instead of " 1 5 +".
+    (void)s;  // Unused parameter
     sapf_anything(x, nullptr, argc, argv);
 }
 
 void sapf_status(t_sapf* x)
 {
+    if (!x) {
+        error("sapf~: Object not initialized");
+        return;
+    }
+
+    pthread_mutex_lock(&x->threadMutex);
+
     post("sapf~: === STATUS ===");
 
     if (x->mainThread) {
@@ -391,6 +406,8 @@ void sapf_status(t_sapf* x)
 
     post("sapf~: SAPF version: %s", SapfGetVersionString());
     post("sapf~: === END STATUS ===");
+
+    pthread_mutex_unlock(&x->threadMutex);
 }
 
 void sapf_assist(t_sapf* x, void* b, long io, long idx, char* s)
@@ -416,14 +433,36 @@ void sapf_dsp64(t_sapf* x, t_object* dsp64, short* count, double samplerate, lon
     post("sapf~: DSP setup: sample rate %.1f Hz, vector size %ld", samplerate, maxvectorsize);
 
     // Update sample rate if changed
+    // WARNING: vm.setSampleRate() is global - all sapf~ instances share the same VM.
+    // If multiple instances run at different sample rates, behavior is undefined.
     if (x->currentSampleRate != samplerate) {
         x->currentSampleRate = samplerate;
+
+        // Check for sample rate conflicts between instances
+        if (gConfiguredSampleRate != 0.0 && gConfiguredSampleRate != samplerate) {
+            error("sapf~: Sample rate conflict! This instance uses %.1f Hz but VM is configured for %.1f Hz. "
+                  "All sapf~ instances must use the same sample rate.", samplerate, gConfiguredSampleRate);
+        }
+
         vm.setSampleRate(samplerate);
+        gConfiguredSampleRate = samplerate;
         post("sapf~: Sample rate updated to %.1f Hz", samplerate);
     }
 
     // Reallocate audio buffers if needed
     if (x->bufferSize != maxvectorsize) {
+        // CRITICAL: Stop all audio before reallocating buffers.
+        // SAPF generators (especially AdcGen) may hold pointers to these buffers.
+        // Freeing buffers while generators reference them causes use-after-free crashes.
+        if (HasAudioBackend()) {
+            try {
+                GetAudioBackend().stopAll();
+                post("sapf~: Stopped audio for buffer reallocation");
+            } catch (...) {
+                // Continue with reallocation even if stop fails
+            }
+        }
+
         // Free old output buffers
         for (float* buf : x->audioBuffers) {
             delete[] buf;
@@ -538,6 +577,8 @@ void sapf_stack(t_sapf* x)
         return;
     }
 
+    pthread_mutex_lock(&x->threadMutex);
+
     size_t depth = x->mainThread->stackDepth();
     post("sapf~: Stack depth: %zu", depth);
 
@@ -546,6 +587,8 @@ void sapf_stack(t_sapf* x)
     } else {
         x->mainThread->printStack();
     }
+
+    pthread_mutex_unlock(&x->threadMutex);
 }
 
 void sapf_clear(t_sapf* x)
@@ -555,6 +598,8 @@ void sapf_clear(t_sapf* x)
         return;
     }
 
+    pthread_mutex_lock(&x->threadMutex);
+
     size_t depth = x->mainThread->stackDepth();
     if (depth > 0) {
         x->mainThread->clearStack();
@@ -562,10 +607,21 @@ void sapf_clear(t_sapf* x)
     } else {
         post("sapf~: Stack already empty");
     }
+
+    pthread_mutex_unlock(&x->threadMutex);
 }
 
 void sapf_stop(t_sapf* x)
 {
+    if (!x) {
+        error("sapf~: Object not initialized");
+        return;
+    }
+
+    // Mutex protects against race with sapf_anything which may be
+    // creating new players while we're stopping them
+    pthread_mutex_lock(&x->threadMutex);
+
     if (HasAudioBackend()) {
         try {
             GetAudioBackend().stopAll();
@@ -574,6 +630,8 @@ void sapf_stop(t_sapf* x)
             error("sapf~: Error stopping audio: %s", e.what());
         }
     }
+
+    pthread_mutex_unlock(&x->threadMutex);
 }
 
 void outputStackToTextOutlet(t_sapf* x)
