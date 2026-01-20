@@ -25,13 +25,12 @@
             {
                 "box": {
                     "id": "obj-22",
-                    "linecount": 2,
                     "maxclass": "message",
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 310.0, 402.0, 216.0, 35.0 ],
-                    "text": "440 0 sinosc dup 0.25 0.25 delayl 0.5 * + play"
+                    "patching_rect": [ 310.0, 402.0, 244.0, 22.0 ],
+                    "text": "440 0 sinosc aa 0.25 0.25 delayl 0.5 * + play"
                 }
             },
             {
@@ -167,7 +166,7 @@
                     "numoutlets": 1,
                     "outlettype": [ "" ],
                     "patching_rect": [ 213.0, 571.5, 230.0, 22.0 ],
-                    "text": "value [infinite_list]"
+                    "text": "value 1."
                 }
             },
             {
@@ -465,6 +464,14 @@
         ],
         "parameters": {
             "obj-10": [ "live.gain~", "Gain", 0 ],
+            "parameterbanks": {
+                "0": {
+                    "index": 0,
+                    "name": "",
+                    "parameters": [ "-", "-", "-", "-", "-", "-", "-", "-" ],
+                    "buttons": [ "-", "-", "-", "-", "-", "-", "-", "-" ]
+                }
+            },
             "inherited_shortname": 1
         },
         "autosave": 0

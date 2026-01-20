@@ -39,11 +39,11 @@ typedef struct _sapf {
     // Audio output buffers (float* for MaxMSPProcessAudio)
     std::vector<float*> audioBuffers;
     long bufferSize;
-    int numOutputChannels;
+    long numOutputChannels;  // long for Max attribute compatibility
 
     // Audio input buffers (float* converted from Max's double input)
     std::vector<float*> inputBuffers;
-    int numInputChannels;
+    long numInputChannels;   // long for Max attribute compatibility
 
     // Sample rate tracking
     double currentSampleRate;
@@ -53,6 +53,9 @@ typedef struct _sapf {
 
     // Non-audio outlet for text output
     void* text_outlet;
+
+    // Verbose mode for debug output (exposed as attribute)
+    long verbose;
 } t_sapf;
 
 // method prototypes
@@ -135,6 +138,22 @@ void ext_main(void* r)
     class_addmethod(c, (method)sapf_clear, "clear", 0);
     class_addmethod(c, (method)sapf_stop, "stop", 0);
 
+    // Add attributes visible in Max inspector
+    // Read-only attributes (set at creation time)
+    CLASS_ATTR_LONG(c, "outputs", 0, t_sapf, numOutputChannels);
+    CLASS_ATTR_STYLE_LABEL(c, "outputs", 0, "text", "Output Channels");
+    CLASS_ATTR_ACCESSORS(c, "outputs", NULL, NULL);  // Read-only: no setter
+
+    CLASS_ATTR_LONG(c, "inputs", 0, t_sapf, numInputChannels);
+    CLASS_ATTR_STYLE_LABEL(c, "inputs", 0, "text", "Input Channels");
+    CLASS_ATTR_ACCESSORS(c, "inputs", NULL, NULL);  // Read-only: no setter
+
+    // Read-write attribute for debug verbosity
+    CLASS_ATTR_LONG(c, "verbose", 0, t_sapf, verbose);
+    CLASS_ATTR_STYLE_LABEL(c, "verbose", 0, "onoff", "Verbose Output");
+    CLASS_ATTR_FILTER_CLIP(c, "verbose", 0, 1);
+    CLASS_ATTR_SAVE(c, "verbose", 0);  // Save with patcher
+
     class_dspinit(c);
     class_register(CLASS_BOX, c);
     sapf_class = c;
@@ -145,16 +164,26 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
     t_sapf* x = (t_sapf*)object_alloc(sapf_class);
 
     if (x) {
-        // MSP inlets: arg is # of inlets and is REQUIRED!
-        dsp_setup((t_pxobject*)x, 2);
-
-        // Parse arguments for number of output channels (default 2)
+        // Parse arguments: [sapf~ num_outputs num_inputs]
+        // num_outputs: 1-8 (default 2)
+        // num_inputs: 1-8 (default 2)
         x->numOutputChannels = 2;
+        x->numInputChannels = 2;
+
         if (argc > 0 && atom_gettype(argv) == A_LONG) {
-            x->numOutputChannels = std::max(1L, std::min(8L, atom_getlong(argv)));
+            x->numOutputChannels = (int)std::max(1L, std::min(8L, atom_getlong(argv)));
+        }
+        if (argc > 1 && atom_gettype(argv + 1) == A_LONG) {
+            x->numInputChannels = (int)std::max(1L, std::min(8L, atom_getlong(argv + 1)));
         }
 
-        // General (non-audio) outlet for text output
+        // Initialize verbose mode (can be changed via attribute)
+        x->verbose = 0;
+
+        // MSP inlets: create signal inlets for audio input
+        dsp_setup((t_pxobject*)x, (int)x->numInputChannels);
+
+        // General (non-audio) outlet for text output (created first, appears last)
         x->text_outlet = outlet_new((t_object*)x, NULL);
 
         // Create audio outlets
@@ -165,9 +194,6 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
         // Initialize mutex for thread safety
         pthread_mutex_init(&x->threadMutex, nullptr);
 
-        // Initialize input channel count (1 inlet)
-        x->numInputChannels = 2;
-
         try {
             // Initialize SAPF engine (only once globally)
             initSapfEngine();
@@ -175,15 +201,37 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
             // Create main execution thread
             x->mainThread = new Thread();
 
-            // Load prelude file
-            const char* preludePath = "sapf-prelude.txt";
-            try {
-                loadFile(*x->mainThread, preludePath);
-                post("sapf~: Prelude loaded from %s", preludePath);
-            } catch (const std::exception& e) {
-                post("sapf~: Warning - Could not load prelude: %s", e.what());
-            } catch (...) {
-                post("sapf~: Warning - Could not load prelude");
+            // Load prelude file using Max's search path
+            {
+                const char* preludeFilename = "sapf-prelude.txt";
+                char preludeFullPath[MAX_PATH_CHARS];
+                char preludeFilenameConform[MAX_FILENAME_CHARS];
+                short preludePathId;
+                t_fourcc preludeType = 0;
+
+                // Copy filename for locatefile (it may modify the string)
+                strncpy(preludeFilenameConform, preludeFilename, MAX_FILENAME_CHARS - 1);
+                preludeFilenameConform[MAX_FILENAME_CHARS - 1] = '\0';
+
+                // Search Max's file search path for the prelude
+                if (locatefile_extended(preludeFilenameConform, &preludePathId, &preludeType, NULL, 0) == 0) {
+                    // Found the file - get full path
+                    path_toabsolutesystempath(preludePathId, preludeFilenameConform, preludeFullPath);
+
+                    try {
+                        loadFile(*x->mainThread, preludeFullPath);
+                        post("sapf~: Prelude loaded from %s", preludeFullPath);
+                    } catch (const std::exception& e) {
+                        post("sapf~: Warning - Could not load prelude from %s: %s",
+                             preludeFullPath, e.what());
+                    } catch (...) {
+                        post("sapf~: Warning - Could not load prelude from %s", preludeFullPath);
+                    }
+                } else {
+                    post("sapf~: Warning - Could not find prelude file '%s' in Max search path. "
+                         "Add the folder containing sapf-prelude.txt to Max's file preferences.",
+                         preludeFilename);
+                }
             }
 
             // Initialize audio buffers
@@ -197,7 +245,8 @@ void* sapf_new(t_symbol* s, long argc, t_atom* argv)
             // Initialize error state
             x->errorMessage[0] = '\0';
 
-            post("sapf~: Initialized with %d output channels", x->numOutputChannels);
+            post("sapf~: Initialized with %d input, %d output channels",
+                 x->numInputChannels, x->numOutputChannels);
 
         } catch (const std::exception& e) {
             error("sapf~: Error during initialization: %s", e.what());
@@ -314,7 +363,9 @@ void sapf_anything(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
         bufferUsed += atomLen;
     }
 
-    post("sapf~: Compiling: %s", codeBuffer);
+    if (x->verbose) {
+        post("sapf~: Compiling: %s", codeBuffer);
+    }
 
     // Lock mutex for thread-safe access to mainThread
     pthread_mutex_lock(&x->threadMutex);
@@ -330,9 +381,11 @@ void sapf_anything(t_sapf* x, t_symbol* s, long argc, t_atom* argv)
 
             size_t stackDepth = x->mainThread->stackDepth();
             if (stackDepth > 0) {
-                post("sapf~: Executed, %zu items on stack", stackDepth);
+                if (x->verbose) {
+                    post("sapf~: Executed, %zu items on stack", stackDepth);
+                }
                 outputStackToTextOutlet(x);
-            } else {
+            } else if (x->verbose) {
                 post("sapf~: Executed, stack empty");
             }
         } else {
@@ -413,12 +466,16 @@ void sapf_status(t_sapf* x)
 void sapf_assist(t_sapf* x, void* b, long io, long idx, char* s)
 {
     if (io == ASSIST_INLET) {
-        snprintf(s, ASSIST_MAX_STRING_LEN, "signal input, SAPF code messages");
+        if (idx == 0) {
+            snprintf(s, ASSIST_MAX_STRING_LEN, "(signal) audio input 1, SAPF code messages");
+        } else if (idx < x->numInputChannels) {
+            snprintf(s, ASSIST_MAX_STRING_LEN, "(signal) audio input %ld", idx + 1);
+        }
     } else if (io == ASSIST_OUTLET) {
         if (idx < x->numOutputChannels) {
-            snprintf(s, ASSIST_MAX_STRING_LEN, "signal output %ld", idx + 1);
+            snprintf(s, ASSIST_MAX_STRING_LEN, "(signal) audio output %ld", idx + 1);
         } else {
-            snprintf(s, ASSIST_MAX_STRING_LEN, "text output");
+            snprintf(s, ASSIST_MAX_STRING_LEN, "stack values, status messages");
         }
     }
 }
@@ -550,9 +607,9 @@ void sapf_help(t_sapf* x)
     post("sapf~ is a Max external embedding the SAPF language interpreter");
     post("SAPF (Sound As Pure Form) is a functional, stack-based audio language");
     post("");
-    post("Basic Usage:");
-    post("  Send SAPF code directly as messages");
-    post("  Example: [440 0 sinosc 0.3 * play]");
+    post("Object arguments: [sapf~ num_outputs num_inputs]");
+    post("  num_outputs: 1-8 (default 2)");
+    post("  num_inputs:  1-8 (default 2)");
     post("");
     post("Commands:");
     post("  status  - Show VM status");
@@ -565,7 +622,12 @@ void sapf_help(t_sapf* x)
     post("  440 0 sinosc play                 - 440Hz sine wave");
     post("  440 0 sinosc 0.3 * play           - Sine at 30% volume");
     post("  [440 550] 0 sinosc play           - Two-channel output");
-    post("  220 330 + 0 sinosc play           - Math: (220+330)Hz");
+    post("  0 adc play                        - Pass through input 1");
+    post("  2 adcn play                       - Pass through inputs 1-2");
+    post("");
+    post("File I/O (offline, finite signals only):");
+    post("  440 0 sinosc 44100 take \"out.aif\" >sf   - Write to file");
+    post("  \"sound.aif\" sf>                         - Read from file");
     post("");
     post("SAPF version: %s", SapfGetVersionString());
 }
@@ -701,3 +763,4 @@ void outputStackToTextOutlet(t_sapf* x)
         post("sapf~: Error outputting stack: %s", e.what());
     }
 }
+

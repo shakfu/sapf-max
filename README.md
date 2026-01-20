@@ -44,16 +44,27 @@ Copy `source/projects/sapf_tilde/sapf-prelude.txt` to Max's search path for the 
 ### Creating the Object
 
 ```
-[sapf~]           // 2 output channels (default)
-[sapf~ 4]         // 4 output channels
-[sapf~ 8]         // 8 output channels (maximum)
+[sapf~]           // 2 in, 2 out (default)
+[sapf~ 4]         // 2 in, 4 out
+[sapf~ 4 1]       // 1 in, 4 out
+[sapf~ 8 8]       // 8 in, 8 out (maximum)
 ```
+
+Arguments: `[sapf~ num_outputs num_inputs]` (both 1-8, default 2)
 
 ### Inlets and Outlets
 
-- **Inlet 1**: Audio input + SAPF code messages
-- **Outlets 1-N**: Audio outputs (configurable)
+- **Inlets 1-N**: Audio inputs (configurable, default 2)
+- **Outlets 1-N**: Audio outputs (configurable, default 2)
 - **Last Outlet**: Text output (stack values, status)
+
+### Attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `inputs` | int (read-only) | Number of input channels |
+| `outputs` | int (read-only) | Number of output channels |
+| `verbose` | bool | Enable verbose debug output |
 
 ## Message API
 
@@ -246,6 +257,34 @@ mix play
 ### Karplus-Strong Pluck
 ```
 0.01 whitenoise 0.005 0 delayl 200 lpf play
+```
+
+## Recording Audio
+
+### Offline Rendering (Finite Signals)
+
+SAPF's `>sf` and `>sfo` primitives render finite signals directly to audio files:
+
+```
+// Write 1 second of audio to file
+440 0 sinosc 44100 take "test.aif" >sf
+
+// Write and open the file
+440 0 sinosc 44100 take "test.aif" >sfo
+
+// Render stereo
+[440 550] 0 sinosc 88200 take "stereo.aif" >sf
+```
+
+Note: The signal must be finite. Use `take`, `first`, or other limiting operations.
+
+### Real-Time Recording
+
+To record sapf~'s live output, use Max's built-in recording objects:
+
+```
+[sapf~] --> [record~ mybuffer]     // Record to buffer~
+[sapf~] --> [sfrecord~ 2]          // Record directly to disk
 ```
 
 ## Platform Support

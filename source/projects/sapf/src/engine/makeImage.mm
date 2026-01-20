@@ -37,7 +37,7 @@ Bitmap* createBitmap(int width, int height)
 				hasAlpha: YES
 				isPlanar: NO
 				colorSpaceName: NSCalibratedRGBColorSpace
-				bitmapFormat: NSAlphaNonpremultipliedBitmapFormat
+				bitmapFormat: NSBitmapFormatAlphaNonpremultiplied
 				bytesPerRow: 0
 				bitsPerPixel: 32
 			];
@@ -78,7 +78,7 @@ void writeBitmap(Bitmap* bitmap, const char *path)
 	//NSData* data = [bitmap->rep TIFFRepresentation];
 	//NSDictionary* properties = @{ NSImageCompressionFactor: @.9 };
 	NSDictionary* properties = nullptr;
-	NSData* data = [bitmap->rep representationUsingType: NSJPEGFileType properties: properties];
+	NSData* data = [bitmap->rep representationUsingType: NSBitmapImageFileTypeJPEG properties: properties];
 	NSString* nsstr = [NSString stringWithUTF8String: path];
 	[data writeToFile: nsstr atomically: YES];
 }
